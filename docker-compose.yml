@@ -1,0 +1,26 @@
+version: '3.6'
+services:
+  pg:
+    image: postgres:18
+    command: -c 'config_file=/etc/postgresql/postgresql.conf'
+    ports:
+      - "127.0.0.1:${PGPORT}:5432"
+    environment:
+      - POSTGRES_PASSWORD_FILE=/run/secrets/root_pwd
+      - POSTGRES_USER=${PGUSER}
+      - POSTGRES_DB=${PGDATABASE}
+    volumes:
+      - ./_db/config/postgres.conf:/etc/postgresql/postgresql.conf:Z,ro
+      - ./_db/data:/var/lib/postgresql/data:Z
+    secrets:
+      - root_pwd
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${PGUSER}"]
+      interval: 5s # How often to run the check
+      timeout: 2s # Time to wait for the test command to complete
+      retries: 2 # Number of consecutive failures before marking as unhealthy
+      start_period: 1s # Grace period for the container to start
+
+secrets:
+  root_pwd:
+    file: _db/secrets/pgpwd
