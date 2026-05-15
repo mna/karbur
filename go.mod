@@ -7,6 +7,7 @@ require (
 	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/philopon/go-toposort v0.0.0-20170620085441-9be86dbd762f
+	golang.org/x/crypto v0.17.0
 )
 
 require (
@@ -17,6 +18,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )

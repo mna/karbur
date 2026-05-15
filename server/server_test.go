@@ -1,4 +1,4 @@
-package kick_test
+package server_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mna/kick"
+	"github.com/mna/karbur/server"
 )
 
 var (
@@ -26,8 +26,8 @@ var (
 
 //nolint:gochecknoinits
 func init() {
-	localhostCert = os.Getenv("KICK_TEST_LOCALHOST_CERT")
-	localhostKey = os.Getenv("KICK_TEST_LOCALHOST_KEY")
+	localhostCert = os.Getenv("KARBUR_TEST_LOCALHOST_CERT")
+	localhostKey = os.Getenv("KARBUR_TEST_LOCALHOST_KEY")
 	if localhostCert == "" || localhostKey == "" {
 		panic("localhost TLS certificate or key not set")
 	}
@@ -48,10 +48,10 @@ func TestServer_HTTP2(t *testing.T) {
 
 	var port = nextPort()
 
-	s := kick.Server{
+	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.NotFoundHandler(),
-		TLS: &kick.TLSConfig{
+		TLS: &server.TLSConfig{
 			CertFile: localhostCert,
 			KeyFile:  localhostKey,
 		},
@@ -98,10 +98,10 @@ func TestServer_HTTP2Disabled(t *testing.T) {
 
 	var port = nextPort()
 
-	s := kick.Server{
+	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.NotFoundHandler(),
-		TLS: &kick.TLSConfig{
+		TLS: &server.TLSConfig{
 			CertFile:     localhostCert,
 			KeyFile:      localhostKey,
 			DisableHTTP2: true,
@@ -152,15 +152,15 @@ func TestServer_TLS(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	modes := []kick.TLSMode{kick.TLSDefault, kick.TLSIntermediate, kick.TLSModern}
+	modes := []server.TLSMode{server.TLSDefault, server.TLSIntermediate, server.TLSModern}
 	for _, m := range modes {
 		t.Run(m.String(), func(t *testing.T) {
 			var port = nextPort()
 
-			s := kick.Server{
+			s := server.Server{
 				Addr:    fmt.Sprintf(":%d", port),
 				Handler: h,
-				TLS: &kick.TLSConfig{
+				TLS: &server.TLSConfig{
 					Mode:     m,
 					CertFile: localhostCert,
 					KeyFile:  localhostKey,
@@ -220,15 +220,15 @@ func TestServer_GracefulShutdownSignal(t *testing.T) {
 	})
 
 	waitForListen := make(chan struct{})
-	s := kick.Server{
+	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: h,
-		GracefulShutdown: &kick.GracefulShutdownConfig{
+		GracefulShutdown: &server.GracefulShutdownConfig{
 			Timeout: shutdownTimeout,
 			Signals: []os.Signal{syscall.SIGUSR1},
 		},
-		ServerStateHook: func(_ *http.Server, state kick.ServerState) {
-			if state == kick.StateListening {
+		ServerStateHook: func(_ *http.Server, state server.ServerState) {
+			if state == server.StateListening {
 				close(waitForListen)
 			}
 		},
@@ -298,10 +298,10 @@ func TestServer_GracefulShutdownCtx(t *testing.T) {
 		time.Sleep(replyAfter)
 		_, _ = w.Write([]byte("ok"))
 	})
-	s := kick.Server{
+	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: h,
-		GracefulShutdown: &kick.GracefulShutdownConfig{
+		GracefulShutdown: &server.GracefulShutdownConfig{
 			Timeout: shutdownTimeout,
 			Signals: []os.Signal{os.Interrupt},
 		},
@@ -360,7 +360,7 @@ func TestServer_ListenAndServeFail(t *testing.T) {
 	defer l.Close()
 
 	// start a server on the same port, will fail on ListenAndServe
-	s := kick.Server{
+	s := server.Server{
 		Addr: fmt.Sprintf(":%s", port),
 	}
 
@@ -387,16 +387,16 @@ func TestServer_ServerState(t *testing.T) {
 
 	var mu sync.Mutex
 	var states string
-	state := func(srv *http.Server, st kick.ServerState) {
+	state := func(srv *http.Server, st server.ServerState) {
 		mu.Lock()
 		states += st.String()
 		mu.Unlock()
 	}
 
-	s := kick.Server{
+	s := server.Server{
 		Addr:            ":0",
 		ServerStateHook: state,
-		GracefulShutdown: &kick.GracefulShutdownConfig{
+		GracefulShutdown: &server.GracefulShutdownConfig{
 			Timeout: time.Second,
 		},
 	}
@@ -416,7 +416,7 @@ func TestServer_ServerState(t *testing.T) {
 }
 
 func TestServer_HTTPServer(t *testing.T) {
-	s := kick.Server{}
+	s := server.Server{}
 
 	srv, err := s.HTTPServer()
 	if err != nil {
@@ -437,7 +437,7 @@ func TestServer_HTTPServer(t *testing.T) {
 }
 
 func TestServer_Build(t *testing.T) {
-	s := kick.Server{}
+	s := server.Server{}
 
 	err := s.Build()
 	if err != nil {
@@ -455,7 +455,7 @@ func TestServer_Build(t *testing.T) {
 }
 
 func TestServer_ZeroValue(t *testing.T) {
-	var s kick.Server
+	var s server.Server
 
 	// make sure it doesn't run forever if it doesn't behave as expected
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -471,7 +471,7 @@ func TestServer_ZeroValue(t *testing.T) {
 }
 
 func TestServer_Default(t *testing.T) {
-	s := kick.Server{
+	s := server.Server{
 		Addr:    ":0",
 		Handler: http.NotFoundHandler(),
 	}
@@ -503,10 +503,10 @@ func TestServer_Default(t *testing.T) {
 }
 
 func TestTLS_Intermediate(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
+	s := &server.Server{
+		TLS: &server.TLSConfig{
 			AutoCert: true,
-			Mode:     kick.TLSIntermediate,
+			Mode:     server.TLSIntermediate,
 		},
 	}
 
@@ -518,10 +518,10 @@ func TestTLS_Intermediate(t *testing.T) {
 }
 
 func TestTLS_Modern(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
+	s := &server.Server{
+		TLS: &server.TLSConfig{
 			AutoCert: true,
-			Mode:     kick.TLSModern,
+			Mode:     server.TLSModern,
 		},
 	}
 
@@ -535,10 +535,10 @@ func TestTLS_Modern(t *testing.T) {
 }
 
 func TestTLS_InvalidMode(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
+	s := &server.Server{
+		TLS: &server.TLSConfig{
 			AutoCert: true,
-			Mode:     kick.TLSModern + 1000,
+			Mode:     server.TLSModern + 1000,
 		},
 	}
 
@@ -552,8 +552,8 @@ func TestTLS_InvalidMode(t *testing.T) {
 }
 
 func TestTLS_AutoCert(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
+	s := &server.Server{
+		TLS: &server.TLSConfig{
 			AutoCert: true,
 		},
 	}
@@ -568,10 +568,10 @@ func TestTLS_AutoCert(t *testing.T) {
 }
 
 func TestTLS_ValidCert(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
-			CertFile: os.Getenv("KICK_TEST_LOCALHOST_CERT"),
-			KeyFile:  os.Getenv("KICK_TEST_LOCALHOST_KEY"),
+	s := &server.Server{
+		TLS: &server.TLSConfig{
+			CertFile: os.Getenv("KARBUR_TEST_LOCALHOST_CERT"),
+			KeyFile:  os.Getenv("KARBUR_TEST_LOCALHOST_KEY"),
 		},
 	}
 
@@ -585,9 +585,9 @@ func TestTLS_ValidCert(t *testing.T) {
 }
 
 func TestTLS_InvalidCert(t *testing.T) {
-	s := &kick.Server{
-		TLS: &kick.TLSConfig{
-			CertFile: os.Getenv("KICK_TEST_LOCALHOST_CERT"),
+	s := &server.Server{
+		TLS: &server.TLSConfig{
+			CertFile: os.Getenv("KARBUR_TEST_LOCALHOST_CERT"),
 		},
 	}
 
@@ -601,7 +601,7 @@ func TestTLS_InvalidCert(t *testing.T) {
 }
 
 func TestTLS_NoConfig(t *testing.T) {
-	s := new(kick.Server)
+	s := new(server.Server)
 	hs, err := s.HTTPServer()
 	if err != nil {
 		t.Fatalf("want no error, got %s", err)
@@ -612,7 +612,7 @@ func TestTLS_NoConfig(t *testing.T) {
 }
 
 func TestHTTPServer(t *testing.T) {
-	s := &kick.Server{
+	s := &server.Server{
 		Addr: ":1234",
 	}
 	hs, err := s.HTTPServer()

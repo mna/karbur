@@ -1,4 +1,4 @@
-package kick
+package server
 
 import (
 	"context"

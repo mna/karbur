@@ -1,5 +1,6 @@
 envfile=".envrc"
 dbrootdir="_db"
+certsdir="_certs"
 pgpassfile="${dbrootdir}/secrets/pgpass"
 pgpwdfile="${dbrootdir}/secrets/pgpwd"
 

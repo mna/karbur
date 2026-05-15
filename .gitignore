@@ -3,3 +3,6 @@
 
 # output files, e.g. for test coverage, profiles, etc.
 *.out
+
+# localhost mkcert-generated certificates
+/_certs
