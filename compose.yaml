@@ -1,4 +1,3 @@
-version: '3.6'
 services:
   pg:
     image: postgres:18
@@ -11,7 +10,7 @@ services:
       - POSTGRES_DB=${PGDATABASE}
     volumes:
       - ./_db/config/postgres.conf:/etc/postgresql/postgresql.conf:Z,ro
-      - ./_db/data:/var/lib/postgresql/data:Z
+      - ./_db/data:/var/lib/postgresql:Z
     secrets:
       - root_pwd
     healthcheck:
