@@ -31,7 +31,7 @@ func TestNewPgx(t *testing.T) {
 
 	c.Run("fails with invalid connection string", func(c *qt.C) {
 		mtb := &mocktb{c}
-		c.Assert(func() { NewPgx(mtb, "user=nosuchuser password=clearlynot", "") }, qt.PanicMatches, `.+\b28P01\b.+`)
+		c.Assert(func() { NewPgx(mtb, "user=nosuchuser password=clearlynot", "") }, qt.PanicMatches, `(?ms).+\b28P01\b.+`)
 	})
 
 	c.Run("with test db", func(c *qt.C) {
@@ -94,7 +94,7 @@ func TestNewSQL(t *testing.T) {
 
 	c.Run("fails with invalid connection string", func(c *qt.C) {
 		mtb := &mocktb{c}
-		c.Assert(func() { NewSQL(mtb, "user=nosuchuser password=clearlynot", "") }, qt.PanicMatches, `.+\b28P01\b.+`)
+		c.Assert(func() { NewSQL(mtb, "user=nosuchuser password=clearlynot", "") }, qt.PanicMatches, `(?ms).+\b28P01\b.+`)
 	})
 
 	c.Run("with test db", func(c *qt.C) {
