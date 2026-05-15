@@ -27,8 +27,8 @@ mkdir -p "${certsdir}"
 certfile="${certsdir}/cert.pem"
 keyfile="${certsdir}/key.pem"
 cat <<- EOF >> "${envfile}"
-	export KARBUR_TEST_LOCALHOST_CERT=${certfile}
-	export KARBUR_TEST_LOCALHOST_KEY=${keyfile}
+	export KARBUR_TEST_LOCALHOST_CERT=\$(pwd)/${certfile}
+	export KARBUR_TEST_LOCALHOST_KEY=\$(pwd)/${keyfile}
 	EOF
 
 direnv allow .
