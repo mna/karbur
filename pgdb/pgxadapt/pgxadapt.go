@@ -10,13 +10,13 @@ package pgxadapt
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 )
 

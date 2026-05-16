@@ -3,14 +3,14 @@ package mockdb
 import (
 	"context"
 	"database/sql"
-	"errors"
 
+	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 )
 
 // ErrNotMocked is the error returned by default when an operation has
 // not been mocked.
-var ErrNotMocked = errors.New("operation not mocked")
+const ErrNotMocked = errors.ConstError("operation not mocked")
 
 // NewPool creates a mock Pool with the provided arguments, which may be
 // function signatures that match specific operations of the interface (e.g.

@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -26,25 +25,26 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 	"github.com/philopon/go-toposort"
 )
 
-var (
+const (
 	// ErrCycle is the error returned when applying migrations where there is a
 	// dependency cycle among the migration groups. Note that it may be wrapped,
 	// use errors.Is to check.
-	ErrCycle = errors.New("cycle detected in migration groups")
+	ErrCycle = errors.ConstError("cycle detected in migration groups")
 
 	// ErrMissingGroup is the error returned when applying migrations where at
 	// least one required group has not been registered. Note that it may be
 	// wrapped, use errors.Is to check.
-	ErrMissingGroup = errors.New("migration group(s) not registered")
+	ErrMissingGroup = errors.ConstError("migration group(s) not registered")
 
 	// ErrGroupRegistered is the error returned when Register is called with a
 	// group that is already registered. Note that it may be wrapped, use
 	// errors.Is to check.
-	ErrGroupRegistered = errors.New("group already registered")
+	ErrGroupRegistered = errors.ConstError("group already registered")
 )
 
 const (

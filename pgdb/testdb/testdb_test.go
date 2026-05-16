@@ -2,7 +2,6 @@ package testdb
 
 import (
 	"database/sql"
-	"errors"
 	"os"
 	"testing"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgx/v5"
+	"github.com/mna/karbur/errors"
 )
 
 type mocktb struct{ testing.TB }

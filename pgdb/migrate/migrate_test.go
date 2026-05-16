@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 	"github.com/mna/karbur/pgdb/mockdb"
 	"github.com/mna/karbur/pgdb/pgxadapt"

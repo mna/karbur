@@ -13,8 +13,9 @@ package pgdb
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
+
+	"github.com/mna/karbur/errors"
 )
 
 // Pool defines the methods required for a database pool.
@@ -138,7 +139,7 @@ func EnsureQueryer(ctx context.Context, q Queryer, fn func(context.Context, Quer
 
 // ErrNoTx is the error returned by RequireTx if no current transaction is
 // available.
-var ErrNoTx = errors.New("no current transaction")
+const ErrNoTx = errors.ConstError("no current transaction")
 
 // RequireTx calls fn with the existing transaction from the context, or
 // returns an error if there is no active transaction.

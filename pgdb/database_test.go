@@ -3,13 +3,13 @@ package pgdb_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"io"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 	"github.com/mna/karbur/pgdb/pgxadapt"
 	"github.com/mna/karbur/pgdb/sqladapt"
