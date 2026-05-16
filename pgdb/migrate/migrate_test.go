@@ -32,6 +32,8 @@ var (
 	empty embed.FS
 	//go:embed testdata/fail
 	fail embed.FS
+	//go:embed testdata/groupconfig
+	groupconfig embed.FS
 )
 
 func TestMigrator(t *testing.T) {
@@ -41,6 +43,7 @@ func TestMigrator(t *testing.T) {
 	groupcMigs, _ := fs.Sub(groupc, "testdata/groupc")
 	emptyMigs, _ := fs.Sub(empty, "testdata/empty")
 	failMigs, _ := fs.Sub(fail, "testdata/fail")
+	groupconfigMigs, _ := fs.Sub(groupconfig, "testdata/groupconfig")
 
 	t.Run("Export", func(t *testing.T) {
 		dir := t.TempDir()
@@ -76,6 +79,16 @@ func TestMigrator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(entsB))
 		require.Equal(t, "001.sql.tpl", entsB[0].Name())
+	})
+
+	t.Run("RegisterDuplicate", func(t *testing.T) {
+		mig, err := New(mockdb.NewPool(), nil)
+		require.NoError(t, err)
+		err = mig.Register("a", nil, emptyMigs)
+		require.NoError(t, err)
+		err = mig.Register("a", nil, emptyMigs)
+		require.Error(t, err)
+		require.True(t, errors.Is(err, ErrGroupRegistered))
 	})
 
 	cases := []struct {
@@ -227,6 +240,99 @@ func TestMigrator(t *testing.T) {
 				err := pool.QueryMany(ctx, &vals, "SELECT v FROM migrate_v ORDER BY id")
 				require.NoError(t, err)
 				require.Equal(t, []int{1, 2, 3}, vals)
+			})
+
+			t.Run("MigrateWithConfig", func(t *testing.T) {
+				t.Cleanup(drop)
+				t.Cleanup(func() { _, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS migrate_conf") })
+
+				type tplConfig struct{ V int }
+
+				mig, err := New(pool, nil)
+				require.NoError(t, err)
+				err = mig.Register("cfg", tplConfig{V: 42}, groupconfigMigs)
+				require.NoError(t, err)
+
+				err = mig.Migrate(ctx)
+				require.NoError(t, err)
+
+				var v int
+				err = pool.QueryOne(ctx, &v, "SELECT v FROM migrate_conf")
+				require.NoError(t, err)
+				require.Equal(t, 42, v)
+			})
+
+			t.Run("MigrateIdempotent", func(t *testing.T) {
+				t.Cleanup(drop)
+
+				mig, err := New(pool, nil)
+				require.NoError(t, err)
+				err = mig.Register("a", nil, groupaMigs)
+				require.NoError(t, err)
+
+				err = mig.Migrate(ctx)
+				require.NoError(t, err)
+
+				var first int
+				err = pool.QueryOne(ctx, &first, "SELECT count(*) FROM migrate_v")
+				require.NoError(t, err)
+
+				err = mig.Migrate(ctx)
+				require.NoError(t, err)
+
+				var second int
+				err = pool.QueryOne(ctx, &second, "SELECT count(*) FROM migrate_v")
+				require.NoError(t, err)
+				require.Equal(t, first, second)
+			})
+
+			t.Run("MigrateIncremental", func(t *testing.T) {
+				t.Cleanup(drop)
+
+				// First pass: groupa only (creates table, inserts 1, 2).
+				mig1, err := New(pool, nil)
+				require.NoError(t, err)
+				err = mig1.Register("a", nil, groupaMigs)
+				require.NoError(t, err)
+				err = mig1.Migrate(ctx)
+				require.NoError(t, err)
+
+				var vals []int
+				err = pool.QueryMany(ctx, &vals, "SELECT v FROM migrate_v ORDER BY id")
+				require.NoError(t, err)
+				require.Equal(t, []int{1, 2}, vals)
+
+				// Second pass: add groupc + groupb on top of the already-applied groupa.
+				mig2, err := New(pool, nil)
+				require.NoError(t, err)
+				err = mig2.Register("a", nil, groupaMigs)
+				require.NoError(t, err)
+				err = mig2.Register("c", nil, groupcMigs, "a")
+				require.NoError(t, err)
+				err = mig2.Register("b", nil, groupbMigs, "a", "c")
+				require.NoError(t, err)
+				err = mig2.Migrate(ctx)
+				require.NoError(t, err)
+
+				err = pool.QueryMany(ctx, &vals, "SELECT v FROM migrate_v ORDER BY id")
+				require.NoError(t, err)
+				require.Equal(t, []int{1, 2, 4, 5, 6, 3}, vals)
+			})
+
+			t.Run("MigrateAdvisoryLockID", func(t *testing.T) {
+				t.Cleanup(drop)
+
+				mig, err := New(pool, &Config{AdvisoryLockID: 42})
+				require.NoError(t, err)
+				err = mig.Register("a", nil, groupaMigs)
+				require.NoError(t, err)
+				err = mig.Migrate(ctx)
+				require.NoError(t, err)
+
+				var n int
+				err = pool.QueryOne(ctx, &n, "SELECT count(*) FROM migrate_v")
+				require.NoError(t, err)
+				require.Equal(t, 2, n)
 			})
 		})
 	}
