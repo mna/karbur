@@ -1,1 +1,1 @@
-INSERT INTO migrate_conf (v) VALUES ({{ (index . "cfg").V }})
+INSERT INTO migrate_conf (v) VALUES ({{ .cfg.V }})

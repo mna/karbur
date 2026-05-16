@@ -98,7 +98,7 @@ func New(btx pgdb.BeginTxer, conf *Config) (*Migrator, error) {
 // Migrator implements the postgresql database migrations runner.  A migration
 // run can be applied at any time, a postgres advisory lock is used to grant
 // exclusive access. The lock ID can be configured by setting AdvisoryLockID,
-// it defaults to 0.
+// it defaults to 0. Only the Migrate method is safe to use concurrently.
 type Migrator struct {
 	beginTxer pgdb.BeginTxer
 	config    Config
