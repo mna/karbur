@@ -2,7 +2,6 @@ package server_test
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -51,7 +50,7 @@ func TestServer_HTTP2(t *testing.T) {
 	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.NotFoundHandler(),
-		TLS: &server.TLSConfig{
+		Certs: &server.Certs{
 			CertFile: localhostCert,
 			KeyFile:  localhostKey,
 		},
@@ -98,14 +97,16 @@ func TestServer_HTTP2Disabled(t *testing.T) {
 
 	var port = nextPort()
 
+	proto := new(http.Protocols)
+	proto.SetHTTP1(true)
 	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.NotFoundHandler(),
-		TLS: &server.TLSConfig{
-			CertFile:     localhostCert,
-			KeyFile:      localhostKey,
-			DisableHTTP2: true,
+		Certs: &server.Certs{
+			CertFile: localhostCert,
+			KeyFile:  localhostKey,
 		},
+		Protocols: proto,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -138,70 +139,6 @@ func TestServer_HTTP2Disabled(t *testing.T) {
 	wg.Wait()
 	if want := context.Canceled; lasErr != want {
 		t.Fatalf("want ListenAndServe error to be %v; got %v", want, lasErr)
-	}
-}
-
-func TestServer_TLS(t *testing.T) {
-	const (
-		timeout      = time.Second
-		requestAfter = 500 * time.Millisecond
-	)
-
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	modes := []server.TLSMode{server.TLSDefault, server.TLSIntermediate, server.TLSModern}
-	for _, m := range modes {
-		t.Run(m.String(), func(t *testing.T) {
-			var port = nextPort()
-
-			s := server.Server{
-				Addr:    fmt.Sprintf(":%d", port),
-				Handler: h,
-				TLS: &server.TLSConfig{
-					Mode:     m,
-					CertFile: localhostCert,
-					KeyFile:  localhostKey,
-				},
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-
-			var wg sync.WaitGroup
-			var lasErr error
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				lasErr = s.ListenAndServe(ctx)
-			}()
-
-			time.Sleep(requestAfter)
-			res, err := http.Get(fmt.Sprintf("https://localhost:%d/", port))
-			if err != nil {
-				t.Fatalf("want no client error, got %s", err)
-			}
-			defer res.Body.Close()
-
-			if res.StatusCode != 404 {
-				t.Fatalf("want status code 404, got %d", res.StatusCode)
-			}
-			b, err := io.ReadAll(res.Body)
-			if err != nil {
-				t.Fatalf("failed to read response body: %s", err)
-			}
-			if string(b) != "ok" {
-				t.Fatalf(`want response "ok", got %s`, string(b))
-			}
-			cancel()
-			wg.Wait()
-			if want := context.Canceled; lasErr != want {
-				t.Fatalf("want ListenAndServe error to be %v; got %v", want, lasErr)
-			}
-		})
 	}
 }
 
@@ -502,58 +439,9 @@ func TestServer_Default(t *testing.T) {
 	}
 }
 
-func TestTLS_Intermediate(t *testing.T) {
-	s := &server.Server{
-		TLS: &server.TLSConfig{
-			AutoCert: true,
-			Mode:     server.TLSIntermediate,
-		},
-	}
-
-	hs, err := s.HTTPServer()
-	if err != nil {
-		t.Fatalf("want no error, got %s", err)
-	}
-	_ = hs // TODO: assert some tls configs
-}
-
-func TestTLS_Modern(t *testing.T) {
-	s := &server.Server{
-		TLS: &server.TLSConfig{
-			AutoCert: true,
-			Mode:     server.TLSModern,
-		},
-	}
-
-	hs, err := s.HTTPServer()
-	if err != nil {
-		t.Fatalf("want no error, got %s", err)
-	}
-	if hs.TLSConfig.MinVersion != tls.VersionTLS12 {
-		t.Fatalf("want MinVersion to be %v, got %v", tls.VersionTLS12, hs.TLSConfig.MinVersion)
-	}
-}
-
-func TestTLS_InvalidMode(t *testing.T) {
-	s := &server.Server{
-		TLS: &server.TLSConfig{
-			AutoCert: true,
-			Mode:     server.TLSModern + 1000,
-		},
-	}
-
-	_, err := s.HTTPServer()
-	if err == nil {
-		t.Fatalf("want error, got none")
-	}
-	if !strings.Contains(err.Error(), "tls: unsupported TLS mode") {
-		t.Fatalf("unexpected error message: %s", err)
-	}
-}
-
 func TestTLS_AutoCert(t *testing.T) {
 	s := &server.Server{
-		TLS: &server.TLSConfig{
+		Certs: &server.Certs{
 			AutoCert: true,
 		},
 	}
@@ -569,7 +457,7 @@ func TestTLS_AutoCert(t *testing.T) {
 
 func TestTLS_ValidCert(t *testing.T) {
 	s := &server.Server{
-		TLS: &server.TLSConfig{
+		Certs: &server.Certs{
 			CertFile: os.Getenv("KARBUR_TEST_LOCALHOST_CERT"),
 			KeyFile:  os.Getenv("KARBUR_TEST_LOCALHOST_KEY"),
 		},
@@ -586,7 +474,7 @@ func TestTLS_ValidCert(t *testing.T) {
 
 func TestTLS_InvalidCert(t *testing.T) {
 	s := &server.Server{
-		TLS: &server.TLSConfig{
+		Certs: &server.Certs{
 			CertFile: os.Getenv("KARBUR_TEST_LOCALHOST_CERT"),
 		},
 	}

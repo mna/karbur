@@ -17,8 +17,10 @@ import (
 )
 
 // A Server defines parameters for running an HTTP server.
-// Its fields must be set prior to calling Build or
-// ListenAndServe, and should not be modified afterwards.
+// Its fields must be set prior to calling Build, HTTPServer or
+// ListenAndServe, and should not be modified afterwards, but
+// further configuration of the built *http.Server can be done
+// by calling HTTPServer before calling ListenAndServe.
 // Once closed, a Server cannot be restarted.
 type Server struct {
 	// Addr is the TCP address to listen on, <addr>:<port>.
@@ -37,12 +39,22 @@ type Server struct {
 	// details.
 	MaxHeaderBytes int
 
+	// Protocols is the set of protocols accepted by the server.
+	// It is transferred as-is to the corresponding http.Server
+	// field, see that field's documentation for details.
+	Protocols *http.Protocols
+
 	// Handler is transferred as-is to the corresponding http.Server field, see
 	// that field's documentation for details.
 	Handler http.Handler
 
-	// TLS configures the TLS settings of the server.
-	TLS *TLSConfig
+	// HTTP2Config configures the HTTP2 support. It is transferred
+	// as-is to the corresponding http.Server fields, see that type's
+	// fields documentation for details.
+	HTTP2Config *http.HTTP2Config
+
+	// Certs configure TLS certificates for the server.
+	Certs *Certs
 
 	// GracefulShutdown enables the graceful shutdown of the
 	// server on configured signals, or when the context passed
@@ -81,10 +93,7 @@ type Server struct {
 	state int32
 }
 
-// Build generates the properly configured http.Server and
-// net.Listener from the Server struct. Everything is ready
-// to run by calling Serve on the returned http.Server and
-// passing it the returned net.Listener.
+// Build generates the properly configured http.Server.
 func (s *Server) Build() error {
 	if s.built {
 		return errors.New("server already built")
@@ -100,16 +109,11 @@ func (s *Server) build() error {
 		return err
 	}
 
-	srv, err := buildHTTPServer(s)
+	srv, err := buildHTTPServer(s, tc)
 	if err != nil {
 		return err
 	}
 
-	if s.TLS != nil && s.TLS.DisableHTTP2 && srv.TLSNextProto == nil {
-		srv.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
-	}
-
-	srv.TLSConfig = tc
 	s.srv = srv
 	return nil
 }
@@ -268,39 +272,8 @@ func (s ServerState) String() string {
 	return stringServerState[s]
 }
 
-// TLSMode is the type of the predefined TLS configuration modes.
-type TLSMode int
-
-// List of supported TLS modes.
-const (
-	TLSDefault TLSMode = iota
-	TLSIntermediate
-	TLSModern
-)
-
-var stringTLSMode = [...]string{
-	TLSDefault:      "TLSDefault",
-	TLSIntermediate: "TLSIntermediate",
-	TLSModern:       "TLSModern",
-}
-
-func (m TLSMode) String() string {
-	if m < 0 || int(m) >= len(stringTLSMode) {
-		return fmt.Sprintf("<unknown:%d>", m)
-	}
-	return stringTLSMode[m]
-}
-
-// TLSConfig configures the TLS settings of the server.
-// See https://wiki.mozilla.org/Security/Server_Side_TLS and
-// https://blog.cloudflare.com/exposing-go-on-the-internet/
-// for more details.
-type TLSConfig struct {
-	// Mode is the TLS mode to use. It is just a hint passed to the
-	// TLS builder, and is a moving target as cryptography evolves
-	// and so do configuration recommendations.
-	Mode TLSMode
-
+// Certs configures the TLS certificates of the server.
+type Certs struct {
 	// AutoCert indicates if the TLS certificate should be automatically
 	// generated and renewed.
 	AutoCert bool
@@ -325,16 +298,6 @@ type TLSConfig struct {
 	// certificate files.
 	CertFile string
 	KeyFile  string
-
-	// DisableHTTP2 indicates that the TLS server should not support
-	// HTTP/2. By default, a Server with a TLSConfig would automatically
-	// support HTTP/2, but it may be useful in certain conditions to
-	// disable that automatic support (e.g. for Websockets, at least
-	// until those are supported on HTTP/2).
-	//
-	// This is an option on TLSConfig and not directly on the Server,
-	// because automatic HTTP/2 support is only enabled for TLS servers.
-	DisableHTTP2 bool
 
 	_ struct{} // prevent unkeyed struct creation
 }
@@ -362,61 +325,22 @@ type GracefulShutdownConfig struct {
 }
 
 func buildTLS(s *Server) (*tls.Config, error) {
-	var tc *tls.Config
-
-	if s.TLS == nil {
+	if s.Certs == nil {
 		return nil, nil
 	}
 
-	if s.TLS.AutoCert {
-		tc = configureTLSAutoCert(s.TLS)
-	} else {
-		tc = new(tls.Config)
+	if s.Certs.AutoCert {
+		return configureTLSAutoCert(s.Certs), nil
 	}
 
-	switch s.TLS.Mode {
-	case TLSDefault:
-		// zero-value of tls.Config requested
-
-	case TLSIntermediate, TLSModern:
-		// Only use curves which have assembly implementations
-		tc.CurvePreferences = []tls.CurveID{
-			tls.CurveP256,
-			tls.X25519,
-		}
-		if s.TLS.Mode == TLSIntermediate {
-			break
-		}
-
-		tc.MinVersion = tls.VersionTLS12
-		tc.CipherSuites = []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-
-			// Best disabled, as they don't provide Forward Secrecy,
-			// but might be necessary for some clients
-			// tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			// tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		}
-
-	default:
-		return nil, fmt.Errorf("tls: unsupported TLS mode: %d", s.TLS.Mode)
+	tc := new(tls.Config)
+	if err := configureTLSCertificate(tc, s.Certs.CertFile, s.Certs.KeyFile); err != nil {
+		return nil, err
 	}
-
-	if !s.TLS.AutoCert {
-		if err := configureTLSCertificate(tc, s.TLS.CertFile, s.TLS.KeyFile); err != nil {
-			return nil, err
-		}
-	}
-
 	return tc, nil
 }
 
-func configureTLSAutoCert(config *TLSConfig) *tls.Config {
+func configureTLSAutoCert(config *Certs) *tls.Config {
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(config.AutoCertCacheDir),
 		Prompt:     autocert.AcceptTOS,
@@ -438,10 +362,11 @@ func configureTLSCertificate(tc *tls.Config, certFile, keyFile string) error {
 	return err
 }
 
-func buildHTTPServer(s *Server) (*http.Server, error) {
+func buildHTTPServer(s *Server, tc *tls.Config) (*http.Server, error) {
 	srv := &http.Server{
 		Addr:              s.Addr,
 		Handler:           s.Handler,
+		TLSConfig:         tc,
 		ReadTimeout:       s.ReadTimeout,
 		ReadHeaderTimeout: s.ReadHeaderTimeout,
 		WriteTimeout:      s.WriteTimeout,
@@ -451,6 +376,8 @@ func buildHTTPServer(s *Server) (*http.Server, error) {
 		ErrorLog:          s.ErrorLog,
 		BaseContext:       s.BaseContext,
 		ConnContext:       s.ConnContext,
+		HTTP2:             s.HTTP2Config,
+		Protocols:         s.Protocols,
 	}
 	return srv, nil
 }
