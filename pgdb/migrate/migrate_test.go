@@ -10,13 +10,13 @@ import (
 	"sync"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
 	"github.com/mna/karbur/errors"
 	"github.com/mna/karbur/pgdb"
 	"github.com/mna/karbur/pgdb/mockdb"
 	"github.com/mna/karbur/pgdb/pgxadapt"
 	"github.com/mna/karbur/pgdb/sqladapt"
 	"github.com/mna/karbur/pgdb/testdb"
+	"github.com/stretchr/testify/require"
 )
 
 var ctx = context.Background()
@@ -35,8 +35,6 @@ var (
 )
 
 func TestMigrator(t *testing.T) {
-	c := qt.New(t)
-
 	// root the embedded FS
 	groupaMigs, _ := fs.Sub(groupa, "testdata/groupa")
 	groupbMigs, _ := fs.Sub(groupb, "testdata/groupb")
@@ -44,172 +42,172 @@ func TestMigrator(t *testing.T) {
 	emptyMigs, _ := fs.Sub(empty, "testdata/empty")
 	failMigs, _ := fs.Sub(fail, "testdata/fail")
 
-	c.Run("Export", func(c *qt.C) {
-		dir := c.TempDir()
+	t.Run("Export", func(t *testing.T) {
+		dir := t.TempDir()
 		mockPool := mockdb.NewPool()
 		mig, err := New(mockPool, nil)
-		c.Assert(err, qt.IsNil)
+		require.NoError(t, err)
 
 		err = mig.Register("a", nil, groupaMigs)
-		c.Assert(err, qt.IsNil)
+		require.NoError(t, err)
 		err = mig.Register("b", nil, groupbMigs)
-		c.Assert(err, qt.IsNil)
+		require.NoError(t, err)
 
 		err = mig.Export(dir)
-		c.Assert(err, qt.IsNil)
+		require.NoError(t, err)
 
 		ents, err := os.ReadDir(dir)
-		c.Assert(err, qt.IsNil)
+		require.NoError(t, err)
 
-		c.Assert(len(ents), qt.Equals, 2)
-		c.Assert(ents[0].Name(), qt.Equals, "a")
-		c.Assert(ents[0].IsDir(), qt.IsTrue)
-		c.Assert(ents[1].Name(), qt.Equals, "b")
-		c.Assert(ents[1].IsDir(), qt.IsTrue)
+		require.Equal(t, 2, len(ents))
+		require.Equal(t, "a", ents[0].Name())
+		require.True(t, ents[0].IsDir())
+		require.Equal(t, "b", ents[1].Name())
+		require.True(t, ents[1].IsDir())
 
 		entsA, err := os.ReadDir(filepath.Join(dir, ents[0].Name()))
-		c.Assert(err, qt.IsNil)
-		c.Assert(len(entsA), qt.Equals, 3)
-		c.Assert(entsA[0].Name(), qt.Equals, "001.sql.tpl")
-		c.Assert(entsA[1].Name(), qt.Equals, "002.sql.tpl")
-		c.Assert(entsA[2].Name(), qt.Equals, "003.sql.tpl")
+		require.NoError(t, err)
+		require.Equal(t, 3, len(entsA))
+		require.Equal(t, "001.sql.tpl", entsA[0].Name())
+		require.Equal(t, "002.sql.tpl", entsA[1].Name())
+		require.Equal(t, "003.sql.tpl", entsA[2].Name())
 
 		entsB, err := os.ReadDir(filepath.Join(dir, ents[1].Name()))
-		c.Assert(err, qt.IsNil)
-		c.Assert(len(entsB), qt.Equals, 1)
-		c.Assert(entsB[0].Name(), qt.Equals, "001.sql.tpl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(entsB))
+		require.Equal(t, "001.sql.tpl", entsB[0].Name())
 	})
 
 	cases := []struct {
 		name  string
 		setup func() pgdb.Pool
 	}{
-		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(c, "", ""); return pgxadapt.ToPool(db) }},
-		{"sql", func() pgdb.Pool { db := testdb.NewSQL(c, "", ""); return sqladapt.ToPool(db) }},
+		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
+		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
-		c.Run("Migrate:"+tc.name, func(c *qt.C) {
+		t.Run("Migrate:"+tc.name, func(t *testing.T) {
 			pool := tc.setup()
 
 			drop := func() {
 				if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS migrate_versions"); err != nil {
-					c.Fatal(err)
+					t.Fatal(err)
 				}
 				if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS migrate_v"); err != nil {
-					c.Fatal(err)
+					t.Fatal(err)
 				}
 			}
 
-			c.Run("Register", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("Register", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				mig, err := New(pool, nil)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("a", nil, emptyMigs, "b", "c")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("b", nil, emptyMigs)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("c", nil, emptyMigs, "b")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Migrate(ctx)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				var version int
 				err = pool.QueryOne(ctx, &version, "SELECT version FROM migrate_versions")
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
+				require.Error(t, err)
+				require.True(t, errors.Is(err, sql.ErrNoRows))
 			})
 
-			c.Run("MigrateOrder", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("MigrateOrder", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				mig, err := New(pool, nil)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("a", nil, groupaMigs)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Register("b", nil, groupbMigs, "a", "c")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Register("c", nil, groupcMigs, "a")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Migrate(ctx)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				var vals []int
 				err = pool.QueryMany(ctx, &vals, "SELECT v FROM migrate_v ORDER BY id")
-				c.Assert(err, qt.IsNil)
-				c.Assert(vals, qt.DeepEquals, []int{1, 2, 4, 5, 6, 3})
+				require.NoError(t, err)
+				require.Equal(t, []int{1, 2, 4, 5, 6, 3}, vals)
 			})
 
-			c.Run("MigrateCycle", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("MigrateCycle", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				mig, err := New(pool, nil)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("a", nil, emptyMigs, "b", "c")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("b", nil, emptyMigs, "c")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("c", nil, emptyMigs, "a")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Migrate(ctx)
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(errors.Is(err, ErrCycle), qt.IsTrue)
+				require.Error(t, err)
+				require.True(t, errors.Is(err, ErrCycle))
 			})
 
-			c.Run("MigrateMissingDep", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("MigrateMissingDep", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				mig, err := New(pool, nil)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("a", nil, emptyMigs, "b", "c")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("b", nil, emptyMigs, "d")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Migrate(ctx)
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(errors.Is(err, ErrMissingGroup), qt.IsTrue)
-				c.Assert(err.Error(), qt.Contains, "[c d]")
+				require.Error(t, err)
+				require.True(t, errors.Is(err, ErrMissingGroup))
+				require.Contains(t, err.Error(), "[c d]")
 			})
 
-			c.Run("MigrateRollback", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("MigrateRollback", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				mig, err := New(pool, nil)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 				err = mig.Register("a", nil, groupaMigs)
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Register("f", nil, failMigs, "a")
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 
 				err = mig.Migrate(ctx)
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(err.Error(), qt.Contains, "42703") // invalid column
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "42703") // invalid column
 
 				var val int
 				err = pool.QueryOne(ctx, &val, "SELECT v FROM migrate_v")
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(err.Error(), qt.Contains, "42P01") // invalid table
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "42P01") // invalid table
 			})
 
-			c.Run("MigrateConcurrency", func(c *qt.C) {
-				c.Cleanup(drop)
+			t.Run("MigrateConcurrency", func(t *testing.T) {
+				t.Cleanup(drop)
 
 				migs := make([]*Migrator, 3)
 				for i := range migs {
 					mig, err := New(pool, nil)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 					err = mig.Register("a", nil, groupaMigs)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					err = mig.Register("b", nil, groupbMigs, "a")
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					migs[i] = mig
 				}
@@ -220,15 +218,15 @@ func TestMigrator(t *testing.T) {
 					go func(mig *Migrator) {
 						defer wg.Done()
 						err := mig.Migrate(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 					}(migs[i])
 				}
 				wg.Wait()
 
 				var vals []int
 				err := pool.QueryMany(ctx, &vals, "SELECT v FROM migrate_v ORDER BY id")
-				c.Assert(err, qt.IsNil)
-				c.Assert(vals, qt.DeepEquals, []int{1, 2, 3})
+				require.NoError(t, err)
+				require.Equal(t, []int{1, 2, 3}, vals)
 			})
 		})
 	}

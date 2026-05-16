@@ -6,7 +6,6 @@ import (
 	"io"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mna/karbur/errors"
@@ -14,99 +13,98 @@ import (
 	"github.com/mna/karbur/pgdb/pgxadapt"
 	"github.com/mna/karbur/pgdb/sqladapt"
 	"github.com/mna/karbur/pgdb/testdb"
+	"github.com/stretchr/testify/require"
 )
 
 var ctx = context.Background()
 
 func TestPool(t *testing.T) {
-	c := qt.New(t)
-
 	cases := []struct {
 		name  string
 		setup func() pgdb.Pool
 	}{
-		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(c, "", ""); return pgxadapt.ToPool(db) }},
-		{"sql", func() pgdb.Pool { db := testdb.NewSQL(c, "", ""); return sqladapt.ToPool(db) }},
+		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
+		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
-		c.Run(tc.name, func(c *qt.C) {
+		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
 
-			c.Cleanup(func() {
+			t.Cleanup(func() {
 				err := pool.Close()
-				c.Assert(err, qt.IsNil)
+				require.NoError(t, err)
 			})
 
-			c.Run("QueryOne", func(c *qt.C) {
+			t.Run("QueryOne", func(t *testing.T) {
 				var name string
 				err := pool.QueryOne(ctx, &name, "SELECT current_database()")
-				c.Assert(err, qt.IsNil)
-				c.Assert(name, qt.Contains, "test")
+				require.NoError(t, err)
+				require.Contains(t, name, "test")
 			})
 
-			c.Run("ExecFail", func(c *qt.C) {
+			t.Run("ExecFail", func(t *testing.T) {
 				_, err := pool.Exec(ctx, "CREATE FOO bar")
-				c.Assert(err, qt.IsNotNil)
-				c.Assert(err.Error(), qt.Contains, "42601")
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "42601")
 			})
 
-			c.Run("Pool", func(c *qt.C) {
+			t.Run("Pool", func(t *testing.T) {
 				res, err := pool.Exec(ctx, "CREATE TABLE testint (v integer primary key)")
-				c.Assert(err, qt.IsNil)
-				c.Cleanup(func() {
+				require.NoError(t, err)
+				t.Cleanup(func() {
 					_, _ = pool.Exec(ctx, "DROP TABLE testint")
 				})
 
 				n, err := res.RowsAffected()
-				c.Assert(err, qt.IsNil)
-				c.Assert(n, qt.Equals, int64(0))
+				require.NoError(t, err)
+				require.Equal(t, int64(0), n)
 				_, err = res.LastInsertId()
-				c.Assert(err, qt.IsNotNil)
+				require.Error(t, err)
 
 				for i := 1; i <= 5; i++ {
 					res, err := pool.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", i)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 					n, err := res.RowsAffected()
-					c.Assert(err, qt.IsNil)
-					c.Assert(n, qt.Equals, int64(1))
+					require.NoError(t, err)
+					require.Equal(t, int64(1), n)
 				}
 
-				c.Run("As", func(c *qt.C) {
+				t.Run("As", func(t *testing.T) {
 					pgpool, sqlpool := new(pgxpool.Pool), new(sql.DB)
 					pgok, sqlok := pool.As(&pgpool), pool.As(&sqlpool)
-					c.Assert(pgok, qt.Not(qt.Equals), sqlok)
+					require.NotEqual(t, sqlok, pgok)
 
 					if pgok {
 						err := pgpool.Ping(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 					} else {
 						err := sqlpool.PingContext(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 					}
 				})
 
-				c.Run("QueryOneStruc", func(c *qt.C) {
+				t.Run("QueryOneStruc", func(t *testing.T) {
 					var dst struct{ V int }
 					err := pool.QueryOne(ctx, &dst, "SELECT v FROM testint WHERE v = $1", 2)
-					c.Assert(err, qt.IsNil)
-					c.Assert(dst, qt.DeepEquals, struct{ V int }{2})
+					require.NoError(t, err)
+					require.Equal(t, struct{ V int }{2}, dst)
 				})
 
-				c.Run("QueryOneNoRow", func(c *qt.C) {
+				t.Run("QueryOneNoRow", func(t *testing.T) {
 					var dst int
 					err := pool.QueryOne(ctx, &dst, "SELECT v FROM testint WHERE v = $1", -1)
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
+					require.Error(t, err)
+					require.True(t, errors.Is(err, sql.ErrNoRows))
 				})
 
-				c.Run("QueryMany", func(c *qt.C) {
+				t.Run("QueryMany", func(t *testing.T) {
 					var ids []int
 					err := pool.QueryMany(ctx, &ids, "SELECT v FROM testint")
-					c.Assert(err, qt.IsNil)
-					c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4, 5})
+					require.NoError(t, err)
+					require.Equal(t, []int{1, 2, 3, 4, 5}, ids)
 				})
 
-				c.Run("Cursor", func(c *qt.C) {
+				t.Run("Cursor", func(t *testing.T) {
 					cur := pool.Cursor(ctx, "SELECT v FROM testint")
 					defer cur.Close()
 
@@ -114,107 +112,107 @@ func TestPool(t *testing.T) {
 					for cur.Next() {
 						var id int
 						err := cur.Scan(&id)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						ids = append(ids, id)
 					}
 					err := cur.Err()
-					c.Assert(err, qt.IsNil)
-					c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4, 5})
+					require.NoError(t, err)
+					require.Equal(t, []int{1, 2, 3, 4, 5}, ids)
 				})
 			})
 
-			c.Run("Txer", func(c *qt.C) {
+			t.Run("Txer", func(t *testing.T) {
 				_, err := pool.Exec(ctx, "CREATE TABLE testint (v integer primary key)")
-				c.Assert(err, qt.IsNil)
-				c.Cleanup(func() {
+				require.NoError(t, err)
+				t.Cleanup(func() {
 					_, _ = pool.Exec(ctx, "DROP TABLE testint")
 				})
 
 				for i := 1; i <= 5; i++ {
 					res, err := pool.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", i)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 					n, err := res.RowsAffected()
-					c.Assert(err, qt.IsNil)
-					c.Assert(n, qt.Equals, int64(1))
+					require.NoError(t, err)
+					require.Equal(t, int64(1), n)
 				}
 
-				c.Run("BeginCommit", func(c *qt.C) {
+				t.Run("BeginCommit", func(t *testing.T) {
 					tx, err := pool.BeginTx(ctx, nil)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 					defer func() { _ = tx.Rollback(ctx) }()
 
 					res, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 6)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					n, err := res.RowsAffected()
-					c.Assert(err, qt.IsNil)
-					c.Assert(n, qt.Equals, int64(1))
+					require.NoError(t, err)
+					require.Equal(t, int64(1), n)
 					_, err = res.LastInsertId()
-					c.Assert(err, qt.IsNotNil)
+					require.Error(t, err)
 
 					err = tx.Commit(ctx)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 6)
-					c.Assert(err, qt.IsNil)
-					c.Assert(ok, qt.IsTrue)
+					require.NoError(t, err)
+					require.True(t, ok)
 				})
 
-				c.Run("BeginRollback", func(c *qt.C) {
+				t.Run("BeginRollback", func(t *testing.T) {
 					tx, err := pool.BeginTx(ctx, nil)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 					defer func() { _ = tx.Rollback(ctx) }()
 
 					_, err = tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 7)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					err = tx.Rollback(ctx)
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 7)
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
-					c.Assert(ok, qt.IsFalse)
+					require.Error(t, err)
+					require.True(t, errors.Is(err, sql.ErrNoRows))
+					require.False(t, ok)
 				})
 
-				c.Run("BeginFuncCommit", func(c *qt.C) {
+				t.Run("BeginFuncCommit", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 8)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 8)
-					c.Assert(err, qt.IsNil)
-					c.Assert(ok, qt.IsTrue)
+					require.NoError(t, err)
+					require.True(t, ok)
 				})
 
-				c.Run("BeginFuncRollback", func(c *qt.C) {
+				t.Run("BeginFuncRollback", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 9)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						return errors.New("nope")
 					})
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(err.Error(), qt.Contains, "nope")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "nope")
 
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 9)
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
-					c.Assert(ok, qt.IsFalse)
+					require.Error(t, err)
+					require.True(t, errors.Is(err, sql.ErrNoRows))
+					require.False(t, ok)
 				})
 
-				c.Run("TxerAs", func(c *qt.C) {
+				t.Run("TxerAs", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						var pgtx pgx.Tx
 						sqltx := new(sql.Tx)
 						pgok, sqlok := tx.As(&pgtx), tx.As(&sqltx)
-						c.Assert(pgok, qt.Not(qt.Equals), sqlok)
+						require.NotEqual(t, sqlok, pgok)
 
 						var i int
 						if pgok {
@@ -224,263 +222,263 @@ func TestPool(t *testing.T) {
 						row := sqltx.QueryRow("SELECT 1")
 						return row.Scan(&i)
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("TxerQueryOne", func(c *qt.C) {
+				t.Run("TxerQueryOne", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 10)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						var ok bool
 						err = tx.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 10)
-						c.Assert(err, qt.IsNil)
-						c.Assert(ok, qt.IsTrue)
+						require.NoError(t, err)
+						require.True(t, ok)
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("TxerQueryOneNoRows", func(c *qt.C) {
+				t.Run("TxerQueryOneNoRows", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						var ok bool
 						err := tx.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", -1)
-						c.Assert(err, qt.IsNotNil)
-						c.Assert(ok, qt.IsFalse)
+						require.Error(t, err)
+						require.False(t, ok)
 						return err
 					})
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
+					require.Error(t, err)
+					require.True(t, errors.Is(err, sql.ErrNoRows))
 				})
 
-				c.Run("TxerQueryMany", func(c *qt.C) {
+				t.Run("TxerQueryMany", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						var ids []int
 						err := tx.QueryMany(ctx, &ids, "SELECT v FROM testint WHERE v < $1", 5)
-						c.Assert(err, qt.IsNil)
-						c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4})
+						require.NoError(t, err)
+						require.Equal(t, []int{1, 2, 3, 4}, ids)
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("TxerCursor", func(c *qt.C) {
+				t.Run("TxerCursor", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						var ids []int
 						cur := tx.Cursor(ctx, "SELECT v FROM testint WHERE v < $1", 5)
 						for cur.Next() {
 							var id int
 							err := cur.Scan(&id)
-							c.Assert(err, qt.IsNil)
+							require.NoError(t, err)
 							ids = append(ids, id)
 						}
-						c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4})
+						require.Equal(t, []int{1, 2, 3, 4}, ids)
 						return cur.Err()
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("TxerExecFail", func(c *qt.C) {
+				t.Run("TxerExecFail", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						_, err := tx.Exec(ctx, "INSERT INTO no_Such_TABLE (v) VALUES ($1)", 1)
-						c.Assert(err, qt.IsNotNil)
+						require.Error(t, err)
 						return err
 					})
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(err.Error(), qt.Contains, "42P01")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "42P01")
 				})
 
-				c.Run("EnsureTxNone", func(c *qt.C) {
+				t.Run("EnsureTxNone", func(t *testing.T) {
 					err := pgdb.EnsureTx(ctx, pool, func(ctx context.Context, tx pgdb.Txer) error {
 						_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 11)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 11)
-					c.Assert(err, qt.IsNil)
-					c.Assert(ok, qt.IsTrue)
+					require.NoError(t, err)
+					require.True(t, ok)
 				})
 
-				c.Run("EnsureTxExistCommit", func(c *qt.C) {
+				t.Run("EnsureTxExistCommit", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						err := pgdb.EnsureTx(ctx, pool, func(ctx context.Context, tx pgdb.Txer) error {
 							_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 12)
-							c.Assert(err, qt.IsNil)
+							require.NoError(t, err)
 							return nil
 						})
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						// does not exist yet outside the transaction
 						var ok bool
 						err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 12)
-						c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
-						c.Assert(ok, qt.IsFalse)
+						require.True(t, errors.Is(err, sql.ErrNoRows))
+						require.False(t, ok)
 
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					// exists now, after commit
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 12)
-					c.Assert(err, qt.IsNil)
-					c.Assert(ok, qt.IsTrue)
+					require.NoError(t, err)
+					require.True(t, ok)
 				})
 
-				c.Run("EnsureTxExistRollback", func(c *qt.C) {
+				t.Run("EnsureTxExistRollback", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						err := pgdb.EnsureTx(ctx, pool, func(ctx context.Context, tx pgdb.Txer) error {
 							_, err := tx.Exec(ctx, "INSERT INTO no_SUCH_Table (v) VALUES ($1)", 1)
-							c.Assert(err, qt.IsNotNil)
+							require.Error(t, err)
 							return err
 						})
-						c.Assert(err, qt.IsNotNil)
-						c.Assert(err.Error(), qt.Contains, "42P01")
+						require.Error(t, err)
+						require.Contains(t, err.Error(), "42P01")
 						return err
 					})
-					c.Assert(err, qt.IsNotNil)
+					require.Error(t, err)
 				})
 
-				c.Run("RequireTxNone", func(c *qt.C) {
+				t.Run("RequireTxNone", func(t *testing.T) {
 					err := pgdb.RequireTx(ctx, func(ctx context.Context, tx pgdb.Txer) error {
 						panic("should not be called")
 					})
-					c.Assert(err, qt.IsNotNil)
-					c.Assert(errors.Is(err, pgdb.ErrNoTx), qt.IsTrue)
+					require.Error(t, err)
+					require.True(t, errors.Is(err, pgdb.ErrNoTx))
 				})
 
-				c.Run("RequireTxExistCommit", func(c *qt.C) {
+				t.Run("RequireTxExistCommit", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						err := pgdb.RequireTx(ctx, func(ctx context.Context, tx pgdb.Txer) error {
 							_, err := tx.Exec(ctx, "INSERT INTO testint (v) VALUES ($1)", 13)
-							c.Assert(err, qt.IsNil)
+							require.NoError(t, err)
 							return nil
 						})
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						// does not exist yet outside the transaction
 						var ok bool
 						err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 13)
-						c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
-						c.Assert(ok, qt.IsFalse)
+						require.True(t, errors.Is(err, sql.ErrNoRows))
+						require.False(t, ok)
 
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					// exists now, after commit
 					var ok bool
 					err = pool.QueryOne(ctx, &ok, "SELECT true FROM testint WHERE v = $1", 13)
-					c.Assert(err, qt.IsNil)
-					c.Assert(ok, qt.IsTrue)
+					require.NoError(t, err)
+					require.True(t, ok)
 				})
 
-				c.Run("RequireTxExistRollback", func(c *qt.C) {
+				t.Run("RequireTxExistRollback", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						err := pgdb.RequireTx(ctx, func(ctx context.Context, tx pgdb.Txer) error {
 							_, err := tx.Exec(ctx, "INSERT INTO no_SUCH_Table (v) VALUES ($1)", 1)
-							c.Assert(err, qt.IsNotNil)
+							require.Error(t, err)
 							return err
 						})
-						c.Assert(err, qt.IsNotNil)
-						c.Assert(err.Error(), qt.Contains, "42P01")
+						require.Error(t, err)
+						require.Contains(t, err.Error(), "42P01")
 						return err
 					})
-					c.Assert(err, qt.IsNotNil)
+					require.Error(t, err)
 				})
 
-				c.Run("EnsureQueryerNone", func(c *qt.C) {
+				t.Run("EnsureQueryerNone", func(t *testing.T) {
 					err := pgdb.EnsureQueryer(ctx, pool, func(ctx context.Context, q pgdb.Queryer) error {
 						var count int
 						err := pool.QueryOne(ctx, &count, "SELECT count(*) FROM testint")
-						c.Assert(err, qt.IsNil)
-						c.Assert(count >= 5, qt.IsTrue)
+						require.NoError(t, err)
+						require.True(t, count >= 5)
 						return nil
 					})
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("EnsureQueryerExist", func(c *qt.C) {
+				t.Run("EnsureQueryerExist", func(t *testing.T) {
 					err := pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
 						err := pgdb.EnsureQueryer(ctx, pool, func(ctx context.Context, q pgdb.Queryer) error {
 							var count int
 							err := pool.QueryOne(ctx, &count, "SELECT count(*) FROM testint")
-							c.Assert(err, qt.IsNil)
-							c.Assert(count >= 5, qt.IsTrue)
+							require.NoError(t, err)
+							require.True(t, count >= 5)
 							return io.EOF
 						})
-						c.Assert(errors.Is(err, io.EOF), qt.IsTrue)
+						require.True(t, errors.Is(err, io.EOF))
 						return err
 					})
-					c.Assert(errors.Is(err, io.EOF), qt.IsTrue)
+					require.True(t, errors.Is(err, io.EOF))
 				})
 			})
 
-			c.Run("Conn", func(c *qt.C) {
+			t.Run("Conn", func(t *testing.T) {
 				conn, err := pool.Conn(ctx)
-				c.Assert(err, qt.IsNil)
-				c.Cleanup(func() {
+				require.NoError(t, err)
+				t.Cleanup(func() {
 					err := conn.Close()
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 				})
 
-				c.Run("As", func(c *qt.C) {
+				t.Run("As", func(t *testing.T) {
 					pgconn, sqlconn := new(pgxpool.Conn), new(sql.Conn)
 					pgok, sqlok := conn.As(&pgconn), conn.As(&sqlconn)
-					c.Assert(pgok, qt.Not(qt.Equals), sqlok)
+					require.NotEqual(t, sqlok, pgok)
 
 					if pgok {
 						err := pgconn.Ping(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 					} else {
 						err := sqlconn.PingContext(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 					}
 				})
 
-				c.Run("Exec", func(c *qt.C) {
+				t.Run("Exec", func(t *testing.T) {
 					res, err := conn.Exec(ctx, "CREATE TABLE testint_conn (v integer primary key)")
-					c.Assert(err, qt.IsNil)
+					require.NoError(t, err)
 
 					n, err := res.RowsAffected()
-					c.Assert(err, qt.IsNil)
-					c.Assert(n, qt.Equals, int64(0))
+					require.NoError(t, err)
+					require.Equal(t, int64(0), n)
 					_, err = res.LastInsertId()
-					c.Assert(err, qt.IsNotNil)
+					require.Error(t, err)
 
 					for i := 1; i <= 5; i++ {
 						res, err := conn.Exec(ctx, "INSERT INTO testint_conn (v) VALUES ($1)", i)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						n, err := res.RowsAffected()
-						c.Assert(err, qt.IsNil)
-						c.Assert(n, qt.Equals, int64(1))
+						require.NoError(t, err)
+						require.Equal(t, int64(1), n)
 					}
 
-					c.Run("QueryOneStruc", func(c *qt.C) {
+					t.Run("QueryOneStruc", func(t *testing.T) {
 						var dst struct{ V int }
 						err := conn.QueryOne(ctx, &dst, "SELECT v FROM testint_conn WHERE v = $1", 2)
-						c.Assert(err, qt.IsNil)
-						c.Assert(dst, qt.DeepEquals, struct{ V int }{2})
+						require.NoError(t, err)
+						require.Equal(t, struct{ V int }{2}, dst)
 					})
 
-					c.Run("QueryOneNoRow", func(c *qt.C) {
+					t.Run("QueryOneNoRow", func(t *testing.T) {
 						var dst int
 						err := conn.QueryOne(ctx, &dst, "SELECT v FROM testint_conn WHERE v = $1", -1)
-						c.Assert(err, qt.IsNotNil)
-						c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
+						require.Error(t, err)
+						require.True(t, errors.Is(err, sql.ErrNoRows))
 					})
 
-					c.Run("QueryMany", func(c *qt.C) {
+					t.Run("QueryMany", func(t *testing.T) {
 						var ids []int
 						err := conn.QueryMany(ctx, &ids, "SELECT v FROM testint_conn")
-						c.Assert(err, qt.IsNil)
-						c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4, 5})
+						require.NoError(t, err)
+						require.Equal(t, []int{1, 2, 3, 4, 5}, ids)
 					})
 
-					c.Run("Cursor", func(c *qt.C) {
+					t.Run("Cursor", func(t *testing.T) {
 						cur := conn.Cursor(ctx, "SELECT v FROM testint_conn")
 						defer cur.Close()
 
@@ -488,53 +486,53 @@ func TestPool(t *testing.T) {
 						for cur.Next() {
 							var id int
 							err := cur.Scan(&id)
-							c.Assert(err, qt.IsNil)
+							require.NoError(t, err)
 							ids = append(ids, id)
 						}
 						err := cur.Err()
-						c.Assert(err, qt.IsNil)
-						c.Assert(ids, qt.DeepEquals, []int{1, 2, 3, 4, 5})
+						require.NoError(t, err)
+						require.Equal(t, []int{1, 2, 3, 4, 5}, ids)
 					})
 
-					c.Run("BeginCommit", func(c *qt.C) {
+					t.Run("BeginCommit", func(t *testing.T) {
 						tx, err := conn.BeginTx(ctx, nil)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						defer func() { _ = tx.Rollback(ctx) }()
 
 						res, err := tx.Exec(ctx, "INSERT INTO testint_conn (v) VALUES ($1)", 6)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						n, err := res.RowsAffected()
-						c.Assert(err, qt.IsNil)
-						c.Assert(n, qt.Equals, int64(1))
+						require.NoError(t, err)
+						require.Equal(t, int64(1), n)
 						_, err = res.LastInsertId()
-						c.Assert(err, qt.IsNotNil)
+						require.Error(t, err)
 
 						err = tx.Commit(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						var ok bool
 						err = conn.QueryOne(ctx, &ok, "SELECT true FROM testint_conn WHERE v = $1", 6)
-						c.Assert(err, qt.IsNil)
-						c.Assert(ok, qt.IsTrue)
+						require.NoError(t, err)
+						require.True(t, ok)
 					})
 
-					c.Run("BeginRollback", func(c *qt.C) {
+					t.Run("BeginRollback", func(t *testing.T) {
 						tx, err := conn.BeginTx(ctx, nil)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 						defer func() { _ = tx.Rollback(ctx) }()
 
 						_, err = tx.Exec(ctx, "INSERT INTO testint_conn (v) VALUES ($1)", 7)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						err = tx.Rollback(ctx)
-						c.Assert(err, qt.IsNil)
+						require.NoError(t, err)
 
 						var ok bool
 						err = conn.QueryOne(ctx, &ok, "SELECT true FROM testint_conn WHERE v = $1", 7)
-						c.Assert(err, qt.IsNotNil)
-						c.Assert(errors.Is(err, sql.ErrNoRows), qt.IsTrue)
-						c.Assert(ok, qt.IsFalse)
+						require.Error(t, err)
+						require.True(t, errors.Is(err, sql.ErrNoRows))
+						require.False(t, ok)
 					})
 				})
 			})
