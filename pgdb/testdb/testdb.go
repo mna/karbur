@@ -14,8 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// A context in test mode is not very important as tests are run
-// with a timeout anyway.
 var ctx = context.Background()
 
 // NewSQL creates a temporary test database and returns a *sql.DB

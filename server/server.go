@@ -203,7 +203,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			sdctx := context.Background()
 			if conf.Timeout != 0 {
 				var cancel func()
-				sdctx, cancel = context.WithTimeout(context.Background(), conf.Timeout)
+				sdctx, cancel = context.WithTimeout(sdctx, conf.Timeout)
 				defer cancel()
 			}
 			if conf.ShutdownContext != nil {

@@ -62,7 +62,7 @@ func TestIsTag(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ok := IsTag(tc.err, testTag)
-			require.Equal(t, ok, tc.want)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 }
@@ -81,7 +81,7 @@ func TestIs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ok := Is(tc.err, constErr)
-			require.Equal(t, ok, tc.want)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 }
@@ -107,7 +107,7 @@ func TestHasKey(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ok := HasKey(tc.err, wantKey)
-			require.Equal(t, ok, tc.want)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 }
@@ -134,7 +134,7 @@ func TestHasKeyValue(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ok := HasKeyValue(tc.err, wantKey, wantValue)
-			require.Equal(t, ok, tc.want)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 }
@@ -165,7 +165,7 @@ func TestHasCode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ok := HasCode(tc.err, tc.codes...)
-			require.Equal(t, ok, tc.want)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 }
