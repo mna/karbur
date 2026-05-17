@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"log/slog"
@@ -336,10 +337,81 @@ func TestStripPrefix(t *testing.T) {
 }
 
 func TestCORS(t *testing.T) {
+	const origin = "https://example.org"
+	h := CORS(&CORSConfig{
+		AllowedOrigins: []string{origin},
+		AllowedMethods: []string{"GET", "POST"},
+	})(statusHandler(204))
+
+	t.Run("preflight", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, _ := http.NewRequest("OPTIONS", "/", nil)
+		r.Header.Set("Origin", origin)
+		r.Header.Set("Access-Control-Request-Method", "GET")
+		h.ServeHTTP(w, r)
+
+		require.Equal(t, origin, w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("actual request", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, _ := http.NewRequest("GET", "/", nil)
+		r.Header.Set("Origin", origin)
+		h.ServeHTTP(w, r)
+
+		require.EqualValues(t, 204, w.Code)
+		require.Equal(t, origin, w.Header().Get("Access-Control-Allow-Origin"))
+	})
 }
 
 func TestCompress(t *testing.T) {
+	body := strings.Repeat("hello", 50)
+	h := Compress(&CompressConfig{
+		ContentTypes: []string{"text/plain"},
+		MinSize:      10,
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, err := io.WriteString(w, body)
+		require.NoError(t, err)
+	}))
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	h.ServeHTTP(w, r)
+
+	require.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+
+	gr, err := gzip.NewReader(w.Body)
+	require.NoError(t, err)
+	defer gr.Close()
+	got, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	require.Equal(t, body, string(got))
 }
 
 func TestRequestTimeouts(t *testing.T) {
+	cases := []struct {
+		read, write time.Duration
+	}{
+		{-1, -1},
+		{0, 0},
+		{50 * time.Millisecond, 50 * time.Millisecond},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("r=%v,w=%v", c.read, c.write), func(t *testing.T) {
+			var called bool
+			h := RequestTimeouts(c.read, c.write)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.WriteHeader(204)
+			}))
+
+			w := httptest.NewRecorder()
+			r, _ := http.NewRequest("", "/", nil)
+			h.ServeHTTP(w, r)
+
+			require.True(t, called)
+			require.EqualValues(t, 204, w.Code)
+		})
+	}
 }
