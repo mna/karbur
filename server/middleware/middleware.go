@@ -492,5 +492,29 @@ func Compress(config *CompressConfig) func(http.Handler) http.Handler {
 	return mw
 }
 
-// TODO: RequestTimeouts to set ResponseController.SetReadDeadline and SetWriteDeadline,
-// overriding the http server's timeouts.
+// RequestTimeouts returns a middleware that sets request-specific read and write
+// timeouts that override any server-wide timeouts, by calling SetReadDeadline and
+// SetWriteDeadline of the http.ResponseController. A zero timeout means no timeout,
+// and a negative timeout keeps the server setting.
+func RequestTimeouts(readTimeout, writeTimeout time.Duration) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rc := http.NewResponseController(w)
+			if readTimeout >= 0 {
+				var dl time.Time
+				if readTimeout > 0 {
+					dl = time.Now().Add(readTimeout)
+				}
+				rc.SetReadDeadline(dl)
+			}
+			if writeTimeout >= 0 {
+				var dl time.Time
+				if writeTimeout > 0 {
+					dl = time.Now().Add(writeTimeout)
+				}
+				rc.SetWriteDeadline(dl)
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
+}
