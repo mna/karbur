@@ -169,3 +169,28 @@ func TestHasCode(t *testing.T) {
 		})
 	}
 }
+
+func TestCode(t *testing.T) {
+	cases := []struct {
+		desc string
+		err  error
+		want int
+	}{
+		{"nil", nil, 0},
+		{"not tagged", constErr, 0},
+		{"other key not value", Tag(constErr, testTag, "x"), 0},
+		{"other key and value", Tag(constErr, testTag, "x", "1"), 0},
+		{"other key and code", Tag(constErr, testTag, "x", "1", "code", "1"), 1},
+		{"other key and code not numeric", Tag(constErr, testTag, "x", "1", "code", "a"), 0},
+		{"wrapped", Errorf("wrap: %w", Tag(constErr, testTag, "code", "2")), 2},
+		{"multi codes", Tag(constErr, testTag, "code", "1", "w", "2", "code", "1", "y"), 1},
+		{"multi wrap", Tag(Errorf("wrap: %w", Tag(constErr, testTag, "code", "1")), testTag, "code", "2"), 2},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := Code(tc.err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
