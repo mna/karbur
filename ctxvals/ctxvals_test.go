@@ -52,18 +52,18 @@ func TestLogKeyValue(t *testing.T) {
 	SetLogKeyValue(ctx, "b", 4)
 
 	// get the map
-	m := LogKeyValuePairs(ctx)
+	m := ConsumeLogKeyValuePairs(ctx)
 	require.Equal(t, map[string]any{
 		"b": 4,
 		"c": 3,
 	}, m)
 
 	// get it again, it is now empty
-	m = LogKeyValuePairs(ctx)
+	m = ConsumeLogKeyValuePairs(ctx)
 	require.Empty(t, m)
 
 	SetLogKeyValue(ctx, "d", 5)
-	m = LogKeyValuePairs(ctx)
+	m = ConsumeLogKeyValuePairs(ctx)
 	require.Equal(t, map[string]any{
 		"d": 5,
 	}, m)

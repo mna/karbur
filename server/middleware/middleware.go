@@ -289,7 +289,7 @@ func Logging(reqIDHeader string, logFn func(http.ResponseWriter, *http.Request, 
 				m["request_id"] = w.Header().Get(reqIDHeader)
 			}
 
-			mm := ctxvals.LogKeyValuePairs(r.Context())
+			mm := ctxvals.ConsumeLogKeyValuePairs(r.Context())
 			for k, v := range mm {
 				// prevent overriding the predefined fields
 				if _, ok := m[k]; !ok {

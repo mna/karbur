@@ -54,9 +54,9 @@ func SetLogKeyValue(ctx context.Context, key string, value any) {
 	}
 }
 
-// LogKeyValuePairs returns the map of key-value pairs added to the context.
+// ConsumeLogKeyValuePairs returns the map of key-value pairs added to the context.
 // The context map is cleared on return.
-func LogKeyValuePairs(ctx context.Context) map[string]any {
+func ConsumeLogKeyValuePairs(ctx context.Context) map[string]any {
 	m, _ := ctx.Value(logKeyValueKey).(map[string]any)
 	mm := maps.Clone(m)
 	clear(m)
