@@ -243,6 +243,9 @@ func PanicRecovery(recoverFn func(http.ResponseWriter, *http.Request, interface{
 // key-value pairs. If the reqIDHeader is provided, the request ID is retrieved
 // and added to the logging data. It uses the github.com/felixge/httpsnoop
 // package to capture request metrics.
+//
+// It calls ctxvals.WithLogKeyValue so the request's context can be used with
+// ctxvals.SetLogKeyValue to add key-value pairs to log with the request.
 func Logging(reqIDHeader string, logFn func(http.ResponseWriter, *http.Request, map[string]any)) func(http.Handler) http.Handler {
 	if logFn == nil {
 		logFn = func(w http.ResponseWriter, r *http.Request, m map[string]any) {
@@ -260,6 +263,9 @@ func Logging(reqIDHeader string, logFn func(http.ResponseWriter, *http.Request, 
 
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := ctxvals.WithLogKeyValue(r.Context())
+			r = r.WithContext(ctx)
+
 			start := time.Now()
 			metrics := httpsnoop.CaptureMetrics(h, w, r)
 			end := time.Now()
@@ -281,6 +287,14 @@ func Logging(reqIDHeader string, logFn func(http.ResponseWriter, *http.Request, 
 			}
 			if reqIDHeader != "" {
 				m["request_id"] = w.Header().Get(reqIDHeader)
+			}
+
+			mm := ctxvals.LogKeyValuePairs(r.Context())
+			for k, v := range mm {
+				// prevent overriding the predefined fields
+				if _, ok := m[k]; !ok {
+					m[k] = v
+				}
 			}
 			logFn(w, r, m)
 		})

@@ -3,13 +3,17 @@ package ctxvals
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 )
 
 type ctxKey int
 
-const loggerKey = ctxKey(0)
+const (
+	loggerKey      = ctxKey(0)
+	logKeyValueKey = ctxKey(1)
+)
 
 // WithLogger returns a context that holds the specified logger.
 func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
@@ -32,6 +36,31 @@ func LoggerOr(ctx context.Context) *slog.Logger {
 		l = slog.Default()
 	}
 	return l
+}
+
+// WithLogKeyValue returns a context that holds a container for extra logging
+// key-value pairs.
+func WithLogKeyValue(ctx context.Context) context.Context {
+	return context.WithValue(ctx, logKeyValueKey, make(map[string]any))
+}
+
+// SetLogKeyValue sets the key-value pair in the extra logging container. If
+// WithLogKeyValue has not been called previously for the provided context,
+// the key-value pair is silently dropped.
+func SetLogKeyValue(ctx context.Context, key string, value any) {
+	m, ok := ctx.Value(logKeyValueKey).(map[string]any)
+	if ok {
+		m[key] = value
+	}
+}
+
+// LogKeyValuePairs returns the map of key-value pairs added to the context.
+// The context map is cleared on return.
+func LogKeyValuePairs(ctx context.Context) map[string]any {
+	m, _ := ctx.Value(logKeyValueKey).(map[string]any)
+	mm := maps.Clone(m)
+	clear(m)
+	return mm
 }
 
 // HTTPServer returns the http server value used to serve the request

@@ -38,3 +38,33 @@ func TestHTTPValues(t *testing.T) {
 		require.Equal(t, http.StatusOK, res.StatusCode)
 	})
 }
+
+func TestLogKeyValue(t *testing.T) {
+	ctx := context.Background()
+
+	// no key-value map installed yet
+	SetLogKeyValue(ctx, "a", 1)
+
+	// set the map
+	ctx = WithLogKeyValue(ctx)
+	SetLogKeyValue(ctx, "b", 2)
+	SetLogKeyValue(ctx, "c", 3)
+	SetLogKeyValue(ctx, "b", 4)
+
+	// get the map
+	m := LogKeyValuePairs(ctx)
+	require.Equal(t, map[string]any{
+		"b": 4,
+		"c": 3,
+	}, m)
+
+	// get it again, it is now empty
+	m = LogKeyValuePairs(ctx)
+	require.Empty(t, m)
+
+	SetLogKeyValue(ctx, "d", 5)
+	m = LogKeyValuePairs(ctx)
+	require.Equal(t, map[string]any{
+		"d": 5,
+	}, m)
+}
