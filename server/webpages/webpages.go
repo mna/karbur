@@ -1,5 +1,12 @@
 package webpages
 
+import (
+	"io"
+	"io/fs"
+
+	"github.com/mna/karbur/errors"
+)
+
 type Renderer struct {
 	pages map[string]executer
 }
@@ -16,6 +23,7 @@ type executer interface {
 // template named "layouts/base.tpl", while "pages/app/login.tpl" would be
 // named "app/login.tpl".
 func New(tpls fs.FS) (*Renderer, error) {
+
 }
 
 func (r *Renderer) Render(w io.Writer, page string, data any) error {
