@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mna/karbur/ctxvals"
 	"github.com/stretchr/testify/require"
 )
 
@@ -222,10 +223,13 @@ func TestLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	logFn := func(w http.ResponseWriter, r *http.Request, info map[string]interface{}) {
+		require.Equal(t, "ok", info["test"])
 		logger.Info("logging")
 	}
-	h := Logging("", logFn)(statusHandler(204))
-
+	h := Logging("", logFn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxvals.SetLogKeyValue(r.Context(), "test", "ok")
+		w.WriteHeader(204)
+	}))
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("", "/", nil)
 	h.ServeHTTP(w, r)
