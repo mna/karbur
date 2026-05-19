@@ -48,13 +48,19 @@ func New(tpls fs.FS) (*Renderer, error) {
 
 	pages := make(map[string]executer)
 	errPages := walkSubDir(tpls, "pages", readFile, func(name, content string) error {
-		pageT, err := commonT.Clone()
-		if err != nil {
-			return errors.Errorf("webpages: clone common templates: %w", err)
+		var t *template.Template
+		if commonT != nil {
+			cloneT, err := commonT.Clone()
+			if err != nil {
+				return errors.Errorf("webpages: clone common templates: %w", err)
+			}
+			t = cloneT.New(name)
+		} else {
+			t = template.New(name)
 		}
-		t := pageT.New(name)
+
 		pages[name] = t
-		_, err = t.Parse(content)
+		_, err := t.Parse(content)
 		return err
 	})
 	if errPages != nil {
