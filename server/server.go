@@ -153,22 +153,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	defer cancel()
 
 	conf := s.GracefulShutdown
-	if conf != nil {
-		if len(conf.Signals) > 0 {
-			// listen for signals to trigger graceful shutdown
-			ch := make(chan os.Signal, 1)
-			signal.Notify(ch, conf.Signals...)
-			go func() {
-				<-ch
-				cancel()
-			}()
-
-			// unblock the goroutine on exit if cancelled by other means
-			defer func() {
-				signal.Stop(ch)
-				close(ch)
-			}()
-		}
+	if conf != nil && len(conf.Signals) > 0 {
+		// listen for signals to trigger graceful shutdown
+		var stopSignal context.CancelFunc
+		ctx, stopSignal = signal.NotifyContext(ctx, conf.Signals...)
+		defer stopSignal()
 	}
 
 	srv := s.srv
