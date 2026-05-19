@@ -5,7 +5,8 @@ set -euo pipefail
 source "$(dirname "$0")/common.bash"
 
 if [[ -f "${envfile}" ]]; then
-	echo "The ${envfile} already exists, remove it to re-initialize (note that 'db_destroy' should be executed first if needed)."
+	echo "The ${envfile} already exists, remove it to re-initialize "
+	echo "(note that 'db_destroy' should be executed first if needed)."
 	exit 1
 fi
 
