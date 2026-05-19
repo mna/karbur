@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/mna/karbur/errors"
-	"github.com/mna/karbur/pgdb"
+	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
 )
 
 // ErrNotMocked is the error returned by default when an operation has

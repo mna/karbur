@@ -10,12 +10,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mna/karbur/errors"
-	"github.com/mna/karbur/pgdb"
-	"github.com/mna/karbur/pgdb/mockdb"
-	"github.com/mna/karbur/pgdb/pgxadapt"
-	"github.com/mna/karbur/pgdb/sqladapt"
-	"github.com/mna/karbur/pgdb/testdb"
+	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
+	"codeberg.org/mna/karbur/pgdb/mockdb"
+	"codeberg.org/mna/karbur/pgdb/pgxadapt"
+	"codeberg.org/mna/karbur/pgdb/sqladapt"
+	"codeberg.org/mna/karbur/pgdb/testdb"
 	"github.com/stretchr/testify/require"
 )
 

@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/mna/karbur/errors"
+	"codeberg.org/mna/karbur/errors"
 )
 
 type Renderer struct {

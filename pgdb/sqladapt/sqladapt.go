@@ -13,7 +13,7 @@ import (
 	"fmt"
 
 	"github.com/georgysavva/scany/v2/sqlscan"
-	"github.com/mna/karbur/pgdb"
+	"codeberg.org/mna/karbur/pgdb"
 )
 
 // ToPool converts the stdlib's *sql.DB type to the common pgdb.Pool

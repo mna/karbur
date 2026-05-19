@@ -25,8 +25,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mna/karbur/errors"
-	"github.com/mna/karbur/pgdb"
+	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
 	"github.com/philopon/go-toposort"
 )
 

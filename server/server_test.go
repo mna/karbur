@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mna/karbur/server"
+	"codeberg.org/mna/karbur/server"
 )
 
 var (

@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mna/karbur/errors"
+	"codeberg.org/mna/karbur/errors"
 	"golang.org/x/crypto/acme/autocert"
 )
 

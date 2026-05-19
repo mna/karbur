@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mna/karbur/ctxvals"
+	"codeberg.org/mna/karbur/ctxvals"
 	"github.com/stretchr/testify/require"
 )
 

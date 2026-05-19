@@ -9,7 +9,7 @@ import (
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgx/v5"
-	"github.com/mna/karbur/errors"
+	"codeberg.org/mna/karbur/errors"
 	"github.com/stretchr/testify/require"
 )
 

@@ -22,8 +22,8 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/jub0bs/fcors"
 	"github.com/juju/ratelimit"
-	"github.com/mna/karbur/ctxvals"
-	"github.com/mna/karbur/errors"
+	"codeberg.org/mna/karbur/ctxvals"
+	"codeberg.org/mna/karbur/errors"
 )
 
 // ErrTooManyBytes is returned by the LimitResponseBodyBytes middleware if too

@@ -16,8 +16,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/mna/karbur/errors"
-	"github.com/mna/karbur/pgdb"
+	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
 )
 
 // ToPool converts the pgx-specific pool to the common pgdb.Pool

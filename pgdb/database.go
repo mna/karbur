@@ -15,7 +15,7 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/mna/karbur/errors"
+	"codeberg.org/mna/karbur/errors"
 )
 
 // Pool defines the methods required for a database pool.
