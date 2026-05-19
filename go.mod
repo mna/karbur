@@ -1,4 +1,4 @@
-module github.com/mna/karbur
+module codeberg.org/mna/karbur
 
 go 1.26
 
