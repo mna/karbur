@@ -6,3 +6,6 @@
 
 # localhost mkcert-generated certificates
 /_certs
+
+# AI
+/.claude
