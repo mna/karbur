@@ -57,17 +57,17 @@ type Cursor interface {
 	Close() error
 	Err() error
 	Next() bool
-	Scan(interface{}) error
+	Scan(any) error
 }
 
 // Queryer is the common interface to query and execute SQL
 // statements.
 type Queryer interface {
-	As(interface{}) bool
-	Exec(context.Context, string, ...interface{}) (sql.Result, error)
-	QueryOne(context.Context, interface{}, string, ...interface{}) error
-	QueryMany(context.Context, interface{}, string, ...interface{}) error
-	Cursor(context.Context, string, ...interface{}) Cursor
+	As(any) bool
+	Exec(context.Context, string, ...any) (sql.Result, error)
+	QueryOne(context.Context, any, string, ...any) error
+	QueryMany(context.Context, any, string, ...any) error
+	Cursor(context.Context, string, ...any) Cursor
 }
 
 type ctxKey int
