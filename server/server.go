@@ -90,7 +90,7 @@ type Server struct {
 	srv   *http.Server
 	built bool
 	// handled by s.transit, atomically
-	state int32
+	state atomic.Int32
 }
 
 // Build generates the properly configured http.Server.
@@ -145,7 +145,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			return err
 		}
 	}
-	if atomic.LoadInt32(&s.state) == int32(StateClosed) {
+	if s.state.Load() == int32(StateClosed) {
 		return http.ErrServerClosed
 	}
 
@@ -218,7 +218,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) transit(to ServerState) {
-	atomic.StoreInt32(&s.state, int32(to))
+	s.state.Store(int32(to))
 	if s.ServerStateHook != nil {
 		s.ServerStateHook(s.srv, to)
 	}
