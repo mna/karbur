@@ -1,3 +1,6 @@
+// Package server defines an HTTP server that helps build a production-ready,
+// hardened Go http server with optional graceful shutdown and automatic
+// TLS certificates.
 package server
 
 import (

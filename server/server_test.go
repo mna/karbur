@@ -45,7 +45,7 @@ func TestServer_HTTP2(t *testing.T) {
 		requestAfter = 500 * time.Millisecond
 	)
 
-	var port = nextPort()
+	port := nextPort()
 
 	s := server.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -61,19 +61,16 @@ func TestServer_HTTP2(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var lasErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lasErr = s.ListenAndServe(ctx)
-	}()
+	})
 
 	time.Sleep(requestAfter)
 	res, err := http.Get(fmt.Sprintf("https://localhost:%d/", port))
 	if err != nil {
 		t.Fatalf("want no client error, got %s", err)
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint
 
 	if res.StatusCode != 404 {
 		t.Fatalf("want status code 404, got %d", res.StatusCode)
@@ -95,7 +92,7 @@ func TestServer_HTTP2Disabled(t *testing.T) {
 		requestAfter = 500 * time.Millisecond
 	)
 
-	var port = nextPort()
+	port := nextPort()
 
 	proto := new(http.Protocols)
 	proto.SetHTTP1(true)
@@ -114,19 +111,16 @@ func TestServer_HTTP2Disabled(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var lasErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lasErr = s.ListenAndServe(ctx)
-	}()
+	})
 
 	time.Sleep(requestAfter)
 	res, err := http.Get(fmt.Sprintf("https://localhost:%d/", port))
 	if err != nil {
 		t.Fatalf("want no client error, got %s", err)
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint
 
 	if res.StatusCode != 404 {
 		t.Fatalf("want status code 404, got %d", res.StatusCode)
@@ -191,8 +185,8 @@ func TestServer_GracefulShutdownSignal(t *testing.T) {
 	}()
 	go func() {
 		time.Sleep(signalAfter)
-		if err := proc.Signal(syscall.SIGUSR1); err != nil {
-			panic(fmt.Sprintf("failed to send signal: %s", err))
+		if perr := proc.Signal(syscall.SIGUSR1); perr != nil {
+			panic(fmt.Sprintf("failed to send signal: %s", perr))
 		}
 		wg.Done()
 	}()
@@ -202,7 +196,7 @@ func TestServer_GracefulShutdownSignal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want no client error, got %s", err)
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -250,19 +244,17 @@ func TestServer_GracefulShutdownCtx(t *testing.T) {
 	var wg sync.WaitGroup
 	var dur time.Duration
 	var lasErr error
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		start := time.Now()
 		lasErr = s.ListenAndServe(ctx)
 		dur = time.Since(start)
-		wg.Done()
-	}()
+	})
 
 	res, err := http.Get(fmt.Sprintf("http://localhost:%d/", port))
 	if err != nil {
 		t.Fatalf("want no client error, got %s", err)
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -294,7 +286,7 @@ func TestServer_ListenAndServeFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse port from dummy address: %s", err)
 	}
-	defer l.Close()
+	defer l.Close() //nolint
 
 	// start a server on the same port, will fail on ListenAndServe
 	s := server.Server{

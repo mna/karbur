@@ -17,13 +17,13 @@ import (
 	"strconv"
 	"time"
 
+	"codeberg.org/mna/karbur/ctxvals"
+	"codeberg.org/mna/karbur/errors"
 	"github.com/CAFxX/httpcompression"
 	"github.com/felixge/httpsnoop"
 	"github.com/gorilla/handlers"
 	"github.com/jub0bs/fcors"
 	"github.com/juju/ratelimit"
-	"codeberg.org/mna/karbur/ctxvals"
-	"codeberg.org/mna/karbur/errors"
 )
 
 // ErrTooManyBytes is returned by the LimitResponseBodyBytes middleware if too
@@ -223,7 +223,7 @@ func RequestLimit(config *RequestLimitConfig) func(http.Handler) http.Handler {
 // PanicRecovery returns a middleware that recovers from a panic, calling
 // recoverFn with the response writer, the request, the panic value and the
 // call stack to handle the response to the failed request.
-func PanicRecovery(recoverFn func(http.ResponseWriter, *http.Request, interface{}, []byte)) func(http.Handler) http.Handler {
+func PanicRecovery(recoverFn func(http.ResponseWriter, *http.Request, any, []byte)) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
@@ -269,7 +269,7 @@ func Logging(reqIDHeader string, logFn func(http.ResponseWriter, *http.Request, 
 			start := time.Now()
 			metrics := httpsnoop.CaptureMetrics(h, w, r)
 			end := time.Now()
-			m := map[string]interface{}{
+			m := map[string]any{
 				"start":               start,
 				"end":                 end,
 				"duration":            end.Sub(start),
@@ -519,14 +519,14 @@ func RequestTimeouts(readTimeout, writeTimeout time.Duration) func(http.Handler)
 				if readTimeout > 0 {
 					dl = time.Now().Add(readTimeout)
 				}
-				rc.SetReadDeadline(dl)
+				_ = rc.SetReadDeadline(dl)
 			}
 			if writeTimeout >= 0 {
 				var dl time.Time
 				if writeTimeout > 0 {
 					dl = time.Now().Add(writeTimeout)
 				}
-				rc.SetWriteDeadline(dl)
+				_ = rc.SetWriteDeadline(dl)
 			}
 			h.ServeHTTP(w, r)
 		})

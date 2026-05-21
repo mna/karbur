@@ -192,7 +192,7 @@ func TestTimeoutHandler(t *testing.T) {
 }
 
 func TestPanicRecovery(t *testing.T) {
-	recoverFn := func(w http.ResponseWriter, r *http.Request, v interface{}, stack []byte) {
+	recoverFn := func(w http.ResponseWriter, r *http.Request, v any, stack []byte) {
 		require.Equal(t, io.EOF, v)
 		w.WriteHeader(500)
 	}
@@ -222,7 +222,7 @@ func TestPanicRecovery(t *testing.T) {
 func TestLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	logFn := func(w http.ResponseWriter, r *http.Request, info map[string]interface{}) {
+	logFn := func(w http.ResponseWriter, r *http.Request, info map[string]any) {
 		require.Equal(t, "ok", info["test"])
 		logger.Info("logging")
 	}
@@ -388,7 +388,7 @@ func TestCompress(t *testing.T) {
 
 	gr, err := gzip.NewReader(w.Body)
 	require.NoError(t, err)
-	defer gr.Close()
+	defer gr.Close() //nolint
 	got, err := io.ReadAll(gr)
 	require.NoError(t, err)
 	require.Equal(t, body, string(got))
