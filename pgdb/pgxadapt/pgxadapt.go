@@ -12,12 +12,12 @@ import (
 	"database/sql"
 	"fmt"
 
+	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"codeberg.org/mna/karbur/errors"
-	"codeberg.org/mna/karbur/pgdb"
 )
 
 // ToPool converts the pgx-specific pool to the common pgdb.Pool
@@ -80,7 +80,7 @@ type db struct {
 	pool *pgxpool.Pool
 }
 
-func (d *db) As(i interface{}) bool {
+func (d *db) As(i any) bool {
 	p, ok := i.(**pgxpool.Pool)
 	if !ok {
 		return false
@@ -110,7 +110,7 @@ func (d *db) Conn(ctx context.Context) (pgdb.Connection, error) {
 	return &conn{conn: pconn}, nil
 }
 
-func (d *db) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (d *db) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	res, err := d.pool.Exec(ctx, stmt, args...)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (d *db) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Re
 	return ToSQLResult(res), nil
 }
 
-func (d *db) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (d *db) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := pgxscan.Get(ctx, d.pool, dst, stmt, args...)
 	if pgxscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
@@ -126,11 +126,11 @@ func (d *db) QueryOne(ctx context.Context, dst interface{}, stmt string, args ..
 	return err
 }
 
-func (d *db) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (d *db) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return pgxscan.Select(ctx, d.pool, dst, stmt, args...)
 }
 
-func (d *db) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (d *db) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	// fine to ignore error here, the rows will be in failed state if there was one
 	rows, _ := d.pool.Query(ctx, stmt, args...)
 	return &cursor{rows: rows}
@@ -140,7 +140,7 @@ type conn struct {
 	conn *pgxpool.Conn
 }
 
-func (c *conn) As(i interface{}) bool {
+func (c *conn) As(i any) bool {
 	p, ok := i.(**pgxpool.Conn)
 	if !ok {
 		return false
@@ -162,7 +162,7 @@ func (c *conn) Close() error {
 	return nil
 }
 
-func (c *conn) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (c *conn) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	res, err := c.conn.Exec(ctx, stmt, args...)
 	if err != nil {
 		return nil, err
@@ -170,7 +170,7 @@ func (c *conn) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.
 	return ToSQLResult(res), nil
 }
 
-func (c *conn) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (c *conn) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := pgxscan.Get(ctx, c.conn, dst, stmt, args...)
 	if pgxscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
