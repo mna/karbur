@@ -110,3 +110,8 @@ func (r *Renderer) Render(w io.Writer, page string, data any) error {
 	}
 	return p.Execute(w, data)
 }
+
+func (r *Renderer) Exists(page string) bool {
+	_, ok := r.pages[page]
+	return ok
+}
