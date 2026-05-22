@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -418,4 +419,63 @@ func TestRequestTimeouts(t *testing.T) {
 			require.EqualValues(t, 204, w.Code)
 		})
 	}
+}
+
+func TestFileServerCustomErrors(t *testing.T) {
+	// make permission.txt write-only
+	err := os.Chmod("testdata/fileserver/permission.txt", 0o200)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.Chmod("testdata/fileserver/permission.txt", 0o600)
+	})
+
+	mw := FileServerCustomErrors(func(code int, w http.ResponseWriter, r *http.Request) (handled bool) {
+		switch code {
+		case http.StatusNotFound:
+			http.Error(w, "custom", 444)
+			return true
+		case http.StatusForbidden:
+			http.Error(w, "custom", http.StatusForbidden)
+			return true
+		}
+		// leave precondition code unhandled
+		return false
+	})
+	srv := httptest.NewServer(mw(http.FileServer(http.Dir("testdata/fileserver"))))
+	defer srv.Close()
+
+	// request to a valid file
+	res, err := http.Get(srv.URL + "/file.txt")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	body, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello\n", string(body))
+
+	// request to a non-existing file
+	res, err = http.Get(srv.URL + "/nosuch.txt")
+	require.NoError(t, err)
+	require.Equal(t, 444, res.StatusCode)
+	body, err = io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.Equal(t, "custom\n", string(body))
+
+	// request to a permission-restricted file
+	res, err = http.Get(srv.URL + "/permission.txt")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, res.StatusCode)
+	body, err = io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.Equal(t, "custom\n", string(body))
+
+	// request a valid file with wrong etag, triggering a precondition failed error
+	req, err := http.NewRequest("GET", srv.URL+"/file.txt", nil)
+	require.NoError(t, err)
+	req.Header.Set("If-Match", "wrong-etag-value")
+	res, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusPreconditionFailed, res.StatusCode)
+	body, err = io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.Empty(t, string(body))
 }

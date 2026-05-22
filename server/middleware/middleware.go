@@ -537,5 +537,40 @@ func RequestTimeouts(readTimeout, writeTimeout time.Duration) func(http.Handler)
 // (e.g. http.FileServer or http.FileServerFS) and directs any error (status
 // code >= 400) to the custom error handler, that can decide to handle it or
 // fallback to the default handling.
-func FileServerCustomErrors(errHandler func(code int, w http.ResponseWriter, r *http.Request) (handled bool)) func(http.Handler) http.Handler {
+func FileServerCustomErrors(
+	errHandler func(code int, w http.ResponseWriter, r *http.Request) (handled bool),
+) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var noop, called bool
+			hooks := httpsnoop.Hooks{
+				WriteHeader: func(whf httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+					return func(code int) {
+						if noop {
+							return
+						}
+						if code >= 400 && !called {
+							called = true
+							handled := errHandler(code, w, r)
+							if handled {
+								noop = true
+								return
+							}
+						}
+						whf(code)
+					}
+				},
+				Write: func(wf httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+					return func(b []byte) (int, error) {
+						if noop {
+							return 0, nil
+						}
+						return wf(b)
+					}
+				},
+			}
+			w = httpsnoop.Wrap(w, hooks)
+			h.ServeHTTP(w, r)
+		})
+	}
 }
