@@ -30,7 +30,7 @@ func TestHTTPValues(t *testing.T) {
 			require.NotNil(t, a)
 			require.NotEmpty(t, a.String())
 
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 		}))
 
 		res, err := http.Get(srv.URL)

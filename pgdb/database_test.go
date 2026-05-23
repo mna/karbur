@@ -6,13 +6,13 @@ import (
 	"io"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
 	"codeberg.org/mna/karbur/pgdb/sqladapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,7 +106,7 @@ func TestPool(t *testing.T) {
 
 				t.Run("Cursor", func(t *testing.T) {
 					cur := pool.Cursor(ctx, "SELECT v FROM testint")
-					defer cur.Close()
+					defer cur.Close() //nolint
 
 					var ids []int
 					for cur.Next() {
@@ -480,7 +480,7 @@ func TestPool(t *testing.T) {
 
 					t.Run("Cursor", func(t *testing.T) {
 						cur := conn.Cursor(ctx, "SELECT v FROM testint_conn")
-						defer cur.Close()
+						defer cur.Close() //nolint
 
 						var ids []int
 						for cur.Next() {

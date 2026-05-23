@@ -1,3 +1,5 @@
+// Package ctxvals provides type-safe functions to store and access values
+// in the context.
 package ctxvals
 
 import (

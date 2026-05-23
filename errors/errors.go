@@ -31,7 +31,7 @@ func New(s string) error { return errors.New(s) }
 // synonym for %v.
 //
 // See the stdlib's fmt.Errorf documentation for more details.
-func Errorf(f string, args ...interface{}) error { return fmt.Errorf(f, args...) }
+func Errorf(f string, args ...any) error { return fmt.Errorf(f, args...) }
 
 // Is reports whether any error in err's chain matches target.
 // See the stdlib's errors.Is documentation for more details.
@@ -42,7 +42,7 @@ func Is(err, target error) bool { return errors.Is(err, target) }
 // Otherwise, it returns false.
 //
 // See the stdlib's errors.As documentation for more details.
-func As(err error, target interface{}) bool { return errors.As(err, target) }
+func As(err error, target any) bool { return errors.As(err, target) }
 
 // AsType finds the first error in err's tree that matches the
 // type E, and if one is found, returns that error value and true.

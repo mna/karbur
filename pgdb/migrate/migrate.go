@@ -103,7 +103,7 @@ type Migrator struct {
 	beginTxer pgdb.BeginTxer
 	config    Config
 
-	execData  map[string]interface{}
+	execData  map[string]any
 	groupMigs map[string]fs.FS
 	groupDeps map[string]map[string]bool
 }
@@ -116,7 +116,7 @@ type Migrator struct {
 // the migrations file-system. They are executed as Go's text/template,
 // with a map of all registered groups' configurations as data, in addition
 // to the Migrator's own configuration.
-func (m *Migrator) Register(group string, conf interface{}, migrations fs.FS, after ...string) error {
+func (m *Migrator) Register(group string, conf any, migrations fs.FS, after ...string) error {
 	if m.groupMigs == nil {
 		m.groupMigs = make(map[string]fs.FS)
 	}
@@ -124,7 +124,7 @@ func (m *Migrator) Register(group string, conf interface{}, migrations fs.FS, af
 		m.groupDeps = make(map[string]map[string]bool)
 	}
 	if m.execData == nil {
-		m.execData = make(map[string]interface{})
+		m.execData = make(map[string]any)
 	}
 
 	if _, ok := m.groupMigs[group]; ok {
