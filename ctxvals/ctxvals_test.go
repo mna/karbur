@@ -43,27 +43,27 @@ func TestLogKeyValue(t *testing.T) {
 	ctx := context.Background()
 
 	// no key-value map installed yet
-	SetLogKeyValue(ctx, "a", 1)
+	SetKeyValue(ctx, "a", 1)
 
 	// set the map
-	ctx = WithLogKeyValue(ctx)
-	SetLogKeyValue(ctx, "b", 2)
-	SetLogKeyValue(ctx, "c", 3)
-	SetLogKeyValue(ctx, "b", 4)
+	ctx = WithKeyValue(ctx)
+	SetKeyValue(ctx, "b", 2)
+	SetKeyValue(ctx, "c", 3)
+	SetKeyValue(ctx, "b", 4)
 
 	// get the map
-	m := ConsumeLogKeyValuePairs(ctx)
+	m := ConsumeKeyValuePairs(ctx)
 	require.Equal(t, map[string]any{
 		"b": 4,
 		"c": 3,
 	}, m)
 
 	// get it again, it is now empty
-	m = ConsumeLogKeyValuePairs(ctx)
+	m = ConsumeKeyValuePairs(ctx)
 	require.Empty(t, m)
 
-	SetLogKeyValue(ctx, "d", 5)
-	m = ConsumeLogKeyValuePairs(ctx)
+	SetKeyValue(ctx, "d", 5)
+	m = ConsumeKeyValuePairs(ctx)
 	require.Equal(t, map[string]any{
 		"d": 5,
 	}, m)

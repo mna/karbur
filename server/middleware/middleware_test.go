@@ -228,7 +228,7 @@ func TestLogging(t *testing.T) {
 		logger.Info("logging")
 	}
 	h := Logging("", logFn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctxvals.SetLogKeyValue(r.Context(), "test", "ok")
+		ctxvals.SetKeyValue(r.Context(), "test", "ok")
 		w.WriteHeader(204)
 	}))
 	w := httptest.NewRecorder()

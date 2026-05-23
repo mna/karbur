@@ -38,25 +38,25 @@ func LoggerOr(ctx context.Context) *slog.Logger {
 	return l
 }
 
-// WithLogKeyValue returns a context that holds a container for extra logging
+// WithKeyValue returns a context that holds a container for extra logging
 // key-value pairs.
-func WithLogKeyValue(ctx context.Context) context.Context {
+func WithKeyValue(ctx context.Context) context.Context {
 	return context.WithValue(ctx, logKeyValueKey, make(map[string]any))
 }
 
-// SetLogKeyValue sets the key-value pair in the extra logging container. If
+// SetKeyValue sets the key-value pair in the extra logging container. If
 // WithLogKeyValue has not been called previously for the provided context,
 // the key-value pair is silently dropped.
-func SetLogKeyValue(ctx context.Context, key string, value any) {
+func SetKeyValue(ctx context.Context, key string, value any) {
 	m, ok := ctx.Value(logKeyValueKey).(map[string]any)
 	if ok {
 		m[key] = value
 	}
 }
 
-// ConsumeLogKeyValuePairs returns the map of key-value pairs added to the context.
+// ConsumeKeyValuePairs returns the map of key-value pairs added to the context.
 // The context map is cleared on return.
-func ConsumeLogKeyValuePairs(ctx context.Context) map[string]any {
+func ConsumeKeyValuePairs(ctx context.Context) map[string]any {
 	m, _ := ctx.Value(logKeyValueKey).(map[string]any)
 	mm := maps.Clone(m)
 	clear(m)
