@@ -3,6 +3,7 @@
 package params
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"mime"
 	"net/http"
@@ -19,7 +20,12 @@ import (
 // the struct implements Validator. It uses strict decoding, where unknown
 // fields and unexpected data raises errors.
 //
-// The Decoder is safe for concurrent use.
+// The Decoder is safe for concurrent use. Use the "schema" struct tag for form
+// decoding, "json" for JSON unmarshaling, "path" to decode path values, and
+// "cookie" to decode a cookie value into a field.
+//
+// For cookie decoding other than the "raw" option, it assumes the value is
+// base64URL encoded without any padding.
 type Decoder struct {
 	once  sync.Once
 	form  func(v any, vals map[string][]string) error
@@ -97,6 +103,56 @@ func (d *Decoder) init() {
 	d.path = decPath.Decode
 }
 
+func (d *Decoder) decodeCookie(r *http.Request, v reflect.Value, entry *cookieEntry) error {
+	fld := v.FieldByIndex(entry.dst.Index)
+	if !fld.CanAddr() || !fld.CanSet() {
+		return errors.Errorf("params: struct field %s is not addressable or settable", entry.dst.Name)
+	}
+
+	ck, _ := r.Cookie(entry.cookieName)
+	if ck == nil {
+		// no such cookie, continue
+		return nil
+	}
+
+	ckVal := ck.Value
+	if !entry.raw {
+		b, err := base64.RawURLEncoding.DecodeString(ckVal)
+		if err != nil {
+			return errors.Errorf("params: cookie %s is not base64-url-encoded: %w", ck.Name, err)
+		}
+		ckVal = string(b)
+	}
+
+	if entry.asJSON {
+		if fld.Kind() != reflect.Pointer {
+			fld = fld.Addr()
+		}
+		jsonDec := json.NewDecoder(strings.NewReader(ckVal))
+		jsonDec.DisallowUnknownFields()
+		if err := jsonDec.Decode(fld.Interface()); err != nil {
+			return errors.Errorf("params: cookie %s failed to JSON unmarshal: %w", ck.Name, err)
+		}
+		return nil
+	}
+
+	if fld.Kind() == reflect.Pointer {
+		if fld.IsNil() {
+			if fld.Elem().Kind() != reflect.String {
+				return errors.Errorf("params: struct field %s must be a string or pointer to string", entry.dst.Name)
+			}
+			fld.Set(reflect.ValueOf(new(ckVal)))
+			return nil
+		}
+		fld = fld.Elem()
+	}
+	if fld.Kind() != reflect.String {
+		return errors.Errorf("params: struct field %s must be a string or pointer to string", entry.dst.Name)
+	}
+	fld.SetString(ckVal)
+	return nil
+}
+
 func (d *Decoder) Decode(r *http.Request, dst any) error {
 	d.once.Do(d.init)
 
@@ -134,7 +190,7 @@ func (d *Decoder) Decode(r *http.Request, dst any) error {
 			jsonDec.DisallowUnknownFields()
 
 		default:
-			return errors.Errorf("unsupported content type: %s", ct)
+			return errors.Errorf("params: unsupported content type: %s", ct)
 		}
 	}
 
@@ -147,7 +203,11 @@ func (d *Decoder) Decode(r *http.Request, dst any) error {
 			return err
 		}
 	}
-	// TODO: decode cookie values into the dst
+	for _, ck := range cache.cookieValues {
+		if err := d.decodeCookie(r, v, ck); err != nil {
+			return err
+		}
+	}
 	if len(formValues) > 0 {
 		if err := d.form(dst, formValues); err != nil {
 			return err
@@ -158,7 +218,7 @@ func (d *Decoder) Decode(r *http.Request, dst any) error {
 			return err
 		}
 		if jsonDec.More() {
-			return errors.New("JSON body contains extraneous values")
+			return errors.New("params: JSON body contains extraneous values")
 		}
 	}
 
