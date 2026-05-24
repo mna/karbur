@@ -133,6 +133,9 @@ func (d *Decoder) decodeCookie(r *http.Request, v reflect.Value, entry *cookieEn
 		if err := jsonDec.Decode(fld.Interface()); err != nil {
 			return errors.Errorf("params: cookie %s failed to JSON unmarshal: %w", ck.Name, err)
 		}
+		if jsonDec.More() {
+			return errors.Errorf("params: cookie %s JSON contains extraneous values", ck.Name)
+		}
 		return nil
 	}
 
@@ -153,6 +156,8 @@ func (d *Decoder) decodeCookie(r *http.Request, v reflect.Value, entry *cookieEn
 	return nil
 }
 
+// Decode decodes the http parameters from r into dst. Body decoding depends on
+// the content-type header.
 func (d *Decoder) Decode(r *http.Request, dst any) error {
 	d.once.Do(d.init)
 
