@@ -7,6 +7,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/gorilla/handlers v1.5.2
+	github.com/gorilla/schema v1.4.1
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jub0bs/fcors v0.10.0
 	github.com/juju/ratelimit v1.0.2
