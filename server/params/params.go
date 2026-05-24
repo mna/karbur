@@ -21,8 +21,12 @@ import (
 // fields and unexpected data raises errors.
 //
 // The Decoder is safe for concurrent use. Use the "schema" struct tag for form
-// decoding, "json" for JSON unmarshaling, "path" to decode path values, and
-// "cookie" to decode a cookie value into a field.
+// decoding (including query string values), "json" for JSON unmarshaling,
+// "path" to decode path values, and "cookie" to decode a cookie value into a
+// field. Both the "schema" and "json" tags will assign to a field without any
+// struct tag if it matches, so it is recommended to set fields that should NOT
+// be targeted by form/json decoding with the "-" value to explicitly disable
+// them.
 //
 // For cookie decoding other than the "raw" option, it assumes the value is
 // base64URL encoded without any padding.
@@ -50,10 +54,10 @@ type cookieEntry struct {
 	// set base64-decoded. By setting raw as option, the value is set as-is.
 	raw bool
 	// by default, the cookie value is assigned to the field after
-	// base64-decoding. By setting asJSON as option, the base64-decoded value is
+	// base64-decoding. By setting json as option, the base64-decoded value is
 	// JSON-unmarshaled into the field.
-	asJSON bool
-	dst    reflect.StructField
+	json bool
+	dst  reflect.StructField
 }
 
 func (d *Decoder) cacheGet(t reflect.Type) (entry cacheEntry, found bool) {
@@ -79,7 +83,7 @@ func (d *Decoder) cacheSet(t reflect.Type) (entry cacheEntry, didSet bool) {
 				cookieName: strings.TrimSpace(name),
 				dst:        f,
 				raw:        strings.TrimSpace(opts) == "raw",
-				asJSON:     strings.TrimSpace(opts) == "asJSON",
+				json:       strings.TrimSpace(opts) == "json",
 			})
 		}
 	}
@@ -124,7 +128,7 @@ func (d *Decoder) decodeCookie(r *http.Request, v reflect.Value, entry *cookieEn
 		ckVal = string(b)
 	}
 
-	if entry.asJSON {
+	if entry.json {
 		if fld.Kind() != reflect.Pointer {
 			fld = fld.Addr()
 		}

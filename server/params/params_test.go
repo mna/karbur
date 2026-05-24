@@ -64,6 +64,16 @@ func TestDecoder_Decode(t *testing.T) {
 		return req
 	}
 
+	type AID struct {
+		A  int `schema:"a"`
+		ID int `path:"id" schema:"-"`
+	}
+
+	type IDCk1 struct {
+		ID  int    `path:"id" schema:"-"`
+		Ck1 string `cookie:"ck1" schema:"-"`
+	}
+
 	cases := []struct {
 		desc    string
 		r       *http.Request
@@ -275,6 +285,161 @@ func TestDecoder_Decode(t *testing.T) {
 				Ck1 string `cookie:"ck1"`
 				Ck2 string `cookie:"ck2"`
 			}{Ck1: "zzz", Ck2: "zzz"},
+			``,
+		},
+		{
+			"cookie raw and json",
+			newRequest("GET", "/", nil, false, "ck1", "a", "ck2", `{"x":1}`),
+			&struct {
+				Ck1 string `cookie:"ck1,raw"`
+				Ck2 struct {
+					X int
+				} `cookie:"ck2,json"`
+			}{},
+			struct {
+				Ck1 string `cookie:"ck1,raw"`
+				Ck2 struct {
+					X int
+				} `cookie:"ck2,json"`
+			}{Ck1: base64.RawURLEncoding.EncodeToString([]byte(`a`)), Ck2: struct {
+				X int
+			}{X: 1}},
+			``,
+		},
+		{
+			// gorilla/schema uses the last value provided in url.Values as the one
+			// to set a field to, so query string wins in this case.
+			"query and form body",
+			newRequest("POST", "/?B=y&C=3", &struct {
+				A int
+				B string
+			}{A: 2, B: "z"}, true),
+			&struct {
+				A int    `schema:"A"`
+				B string `schema:"B"`
+				C int    `schema:"C"`
+			}{},
+			struct {
+				A int    `schema:"A"`
+				B string `schema:"B"`
+				C int    `schema:"C"`
+			}{A: 2, B: "y", C: 3},
+			``,
+		},
+		{
+			"query and json body, implicit targets",
+			newRequest("POST", "/?a=1", &struct {
+				B string `json:"b"`
+			}{B: "z"}, false),
+			&struct {
+				A int
+				B string
+			}{},
+			struct {
+				A int
+				B string
+			}{A: 1, B: "z"},
+			``,
+		},
+		{
+			"query and json body, implicit conflicts",
+			newRequest("POST", "/?a=1&b=y", &struct {
+				A int    `json:"a"`
+				B string `json:"b"`
+			}{A: 2, B: "z"}, false),
+			&struct {
+				A int    `schema:"a"`
+				B string `json:"b"`
+			}{},
+			struct {
+				A int    `schema:"a"`
+				B string `json:"b"`
+			}{A: 2, B: "z"},
+			``,
+		},
+		{
+			"query and json body, explicit conflict resolution",
+			newRequest("POST", "/?a=1&b=y", &struct {
+				A int    `json:"a"`
+				B string `json:"b"`
+			}{A: 2, B: "z"}, false),
+			&struct {
+				A int    `schema:"a" json:"-"`
+				B string `json:"b" schema:"-"`
+			}{},
+			nil,
+			`invalid path "b"`,
+		},
+		{
+			"embedded struct query and path",
+			newRequest("GET", "/params/3/ok?a=4", nil, false),
+			&struct {
+				AID
+				Rest string `path:"rest" schema:"-"`
+			}{},
+			struct {
+				AID
+				Rest string `path:"rest" schema:"-"`
+			}{AID: AID{A: 4, ID: 3}, Rest: "ok"},
+			``,
+		},
+		{
+			"embedded struct pointer cookie and path",
+			newRequest("GET", "/params/3/ok", nil, false, "ck1", "abc"),
+			&struct {
+				*IDCk1
+			}{},
+			struct {
+				*IDCk1
+			}{IDCk1: &IDCk1{ID: 3, Ck1: "abc"}},
+			``,
+		},
+		{
+			"everything form",
+			newRequest("POST", "/params/1/end?a=2", &struct {
+				B string `schema:"b"`
+				C int    `schema:"c"`
+			}{B: "z", C: 3}, true, "ck1", "abc"),
+			&struct {
+				A    int    `schema:"a"`
+				B    string `schema:"b"`
+				C    int    `schema:"c"`
+				ID   int    `path:"id" schema:"-"`
+				Rest string `path:"rest" schema:"-"`
+				Ck1  string `cookie:"ck1" schema:"-"`
+			}{},
+			struct {
+				A    int    `schema:"a"`
+				B    string `schema:"b"`
+				C    int    `schema:"c"`
+				ID   int    `path:"id" schema:"-"`
+				Rest string `path:"rest" schema:"-"`
+				Ck1  string `cookie:"ck1" schema:"-"`
+			}{A: 2, B: "z", C: 3, ID: 1, Rest: "end", Ck1: "abc"},
+			``,
+		},
+		{
+			"everything json",
+			newRequest("POST", "/params/1/end?a=2", &struct {
+				B string `json:"b"`
+				C int    `json:"c"`
+			}{B: "z", C: 3}, false, "ck1", "abc"),
+			&struct {
+				A    int    `schema:"a" json:"-"`
+				B    string `json:"b" schema:"-"`
+				C    int    `json:"c" schema:"-"`
+				ID   int    `path:"id" schema:"-" json:"-"`
+				Rest string `path:"rest" schema:"-" json:"-"`
+				Ck1  string `cookie:"ck1" schema:"-" json:"-"`
+			}{},
+			struct {
+				A    int    `schema:"a" json:"-"`
+				B    string `json:"b" schema:"-"`
+				C    int    `json:"c" schema:"-"`
+				ID   int    `path:"id" schema:"-" json:"-"`
+				Rest string `path:"rest" schema:"-" json:"-"`
+				Ck1  string `cookie:"ck1" schema:"-" json:"-"`
+			}{A: 2, B: "z", C: 3, ID: 1, Rest: "end", Ck1: "abc"},
 			``,
 		},
 	}
