@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/base64"
+	"io/fs"
 	"time"
 
 	"codeberg.org/mna/karbur/errors"
@@ -23,7 +24,8 @@ var migrations embed.FS
 // RegisterMigrations registers the tokens package's migrations with the
 // provided migrator.
 func RegisterMigrations(mig *migrate.Migrator) error {
-	return mig.Register("karbur/tokens", nil, migrations)
+	root, _ := fs.Sub(migrations, "migrations")
+	return mig.Register("karbur/tokens", nil, root)
 }
 
 // TokenArgs configures the token to create.
