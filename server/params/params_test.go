@@ -10,9 +10,25 @@ import (
 	"reflect"
 	"testing"
 
+	"codeberg.org/mna/karbur/errors"
 	"github.com/gorilla/schema"
 	"github.com/stretchr/testify/require"
 )
+
+type validator struct {
+	I int    `schema:"i"`
+	S string `schema:"s"`
+}
+
+func (v *validator) Validate() error {
+	if v.I > 2 {
+		return errors.New("value too high")
+	}
+	if len(v.S) > 10 {
+		return errors.New("string too long")
+	}
+	return nil
+}
 
 func TestDecoder_Decode(t *testing.T) {
 	var decodeFn func(r *http.Request)
@@ -440,6 +456,39 @@ func TestDecoder_Decode(t *testing.T) {
 				Rest string `path:"rest" schema:"-" json:"-"`
 				Ck1  string `cookie:"ck1" schema:"-" json:"-"`
 			}{A: 2, B: "z", C: 3, ID: 1, Rest: "end", Ck1: "abc"},
+			``,
+		},
+		{
+			"cookie value into non-string",
+			newRequest("GET", "/", nil, false, "ck1", "val1"),
+			&struct {
+				Ck1 int `cookie:"ck1"`
+			}{},
+			nil,
+			`must be a string or pointer to string`,
+		},
+		{
+			"validator fails",
+			newRequest("GET", "/?i=3&s=abc", nil, false),
+			&validator{},
+			nil,
+			`value too high`,
+		},
+		{
+			"validator fails 2",
+			newRequest("GET", "/?i=1&s=abcdefghijklm", nil, false),
+			&validator{},
+			nil,
+			`string too long`,
+		},
+		{
+			"validator succeeds",
+			newRequest("GET", "/?i=1&s=abcd", nil, false),
+			&validator{},
+			validator{
+				I: 1,
+				S: "abcd",
+			},
 			``,
 		},
 	}
