@@ -22,7 +22,8 @@ import (
 var migrations embed.FS
 
 // RegisterMigrations registers the tokens package's migrations with the
-// provided migrator.
+// provided migrator. The migrations are registered under the group
+// "karbur/tokens".
 func RegisterMigrations(mig *migrate.Migrator) error {
 	root, _ := fs.Sub(migrations, "migrations")
 	return mig.Register("karbur/tokens", nil, root)
@@ -154,6 +155,8 @@ WHERE
 	return &tok, nil
 }
 
+// MustMatchType returns a token validation function that fails if the type of
+// the loaded token is not t.
 func MustMatchType(t string) func(*Token) error {
 	return func(tok *Token) error {
 		if tok.Type != t {
@@ -163,6 +166,8 @@ func MustMatchType(t string) func(*Token) error {
 	}
 }
 
+// MustMatchTypeAndRefID returns a token validation function that fails if the
+// type of the loaded token is not t or if its ref_id is not refID.
 func MustMatchTypeAndRefID(t string, refID int64) func(*Token) error {
 	return func(tok *Token) error {
 		if tok.Type != t || tok.RefID != refID {
