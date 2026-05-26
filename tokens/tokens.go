@@ -204,3 +204,16 @@ WHERE
 		return err
 	})
 }
+
+// Cleanup deletes all expired tokens from the table. It uses the existing DB
+// transaction if there is one, otherwise it uses q. For databases with the
+// pg_cron extension, it is also possible to schedule a recurring database job
+// that calls the "tokens_cleanup" procedure instead of doing the cleanup via
+// this function.
+func Cleanup(ctx context.Context, q pgdb.Queryer) error {
+	const cleanupTokens = `CALL tokens_cleanup();`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, cleanupTokens)
+		return err
+	})
+}

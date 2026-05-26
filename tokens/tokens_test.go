@@ -160,6 +160,27 @@ func TestPool(t *testing.T) {
 			// it is now invalid
 			_, err = Verify(ctx, pool, tok5, nil)
 			require.ErrorIs(t, err, ErrInvalid)
+
+			var countBefore int
+			err = pool.QueryOne(ctx, &countBefore, `SELECT COUNT(*) FROM tokens_tokens;`)
+			require.NoError(t, err)
+			require.NotZero(t, countBefore)
+
+			// call the cleanup of expired tokens
+			var countAfter int
+			err = Cleanup(ctx, pool)
+			require.NoError(t, err)
+			err = pool.QueryOne(ctx, &countAfter, `SELECT COUNT(*) FROM tokens_tokens;`)
+			require.NoError(t, err)
+			require.Less(t, countAfter, countBefore)
+
+			// calling again is a no-op
+			var countLast int
+			err = Cleanup(ctx, pool)
+			require.NoError(t, err)
+			err = pool.QueryOne(ctx, &countLast, `SELECT COUNT(*) FROM tokens_tokens;`)
+			require.NoError(t, err)
+			require.Equal(t, countAfter, countLast)
 		})
 	}
 }
