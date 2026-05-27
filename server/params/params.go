@@ -31,10 +31,16 @@ import (
 // For cookie decoding other than the "raw" option, it assumes the value is
 // base64URL encoded without any padding.
 type Decoder struct {
-	once  sync.Once
 	form  func(v any, vals map[string][]string) error
 	path  func(v any, vals map[string][]string) error
 	cache sync.Map
+}
+
+// New initializes a new Decoder, which is safe to use concurrently.
+func New() *Decoder {
+	var dec Decoder
+	dec.init()
+	return &dec
 }
 
 // Validator defines the method required for a type to validate itself.
@@ -163,8 +169,6 @@ func (d *Decoder) decodeCookie(r *http.Request, v reflect.Value, entry *cookieEn
 // Decode decodes the http parameters from r into dst. Body decoding depends on
 // the content-type header.
 func (d *Decoder) Decode(r *http.Request, dst any) error {
-	d.once.Do(d.init)
-
 	v := reflect.ValueOf(dst)
 	if v.Kind() != reflect.Pointer || v.Elem().Kind() != reflect.Struct {
 		return errors.New("params: interface must be a pointer to struct")

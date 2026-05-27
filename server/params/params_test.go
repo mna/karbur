@@ -492,7 +492,7 @@ func TestDecoder_Decode(t *testing.T) {
 			``,
 		},
 	}
-	var dec Decoder
+	dec := New()
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			decodeFn = func(r *http.Request) {
