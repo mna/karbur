@@ -40,7 +40,7 @@ func TestPool(t *testing.T) {
 			err = mig.Migrate(ctx)
 			require.NoError(t, err)
 
-			tt := New(pool, 0)
+			tt := Tokens{Conn: pool, RawTokenSize: 0}
 
 			// create a token without a type
 			_, err = tt.New(ctx, TokenArgs{

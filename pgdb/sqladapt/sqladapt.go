@@ -12,8 +12,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"codeberg.org/mna/karbur/pgdb"
+	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
 // ToPool converts the stdlib's *sql.DB type to the common pgdb.Pool
@@ -26,7 +26,7 @@ type db struct {
 	db *sql.DB
 }
 
-func (d *db) As(i interface{}) bool {
+func (d *db) As(i any) bool {
 	p, ok := i.(**sql.DB)
 	if !ok {
 		return false
@@ -55,11 +55,11 @@ func (d *db) Conn(ctx context.Context) (pgdb.Connection, error) {
 	return &conn{conn: sqlconn}, nil
 }
 
-func (d *db) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (d *db) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	return d.db.ExecContext(ctx, stmt, args...)
 }
 
-func (d *db) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (d *db) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := sqlscan.Get(ctx, d.db, dst, stmt, args...)
 	if sqlscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
@@ -67,11 +67,11 @@ func (d *db) QueryOne(ctx context.Context, dst interface{}, stmt string, args ..
 	return err
 }
 
-func (d *db) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (d *db) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return sqlscan.Select(ctx, d.db, dst, stmt, args...)
 }
 
-func (d *db) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (d *db) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	rows, err := d.db.QueryContext(ctx, stmt, args...)
 	return &cursor{rows: rows, initErr: err}
 }
@@ -80,7 +80,7 @@ type conn struct {
 	conn *sql.Conn
 }
 
-func (c *conn) As(i interface{}) bool {
+func (c *conn) As(i any) bool {
 	p, ok := i.(**sql.Conn)
 	if !ok {
 		return false
@@ -101,11 +101,11 @@ func (c *conn) Close() error {
 	return c.conn.Close()
 }
 
-func (c *conn) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (c *conn) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	return c.conn.ExecContext(ctx, stmt, args...)
 }
 
-func (c *conn) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (c *conn) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := sqlscan.Get(ctx, c.conn, dst, stmt, args...)
 	if sqlscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
@@ -113,11 +113,11 @@ func (c *conn) QueryOne(ctx context.Context, dst interface{}, stmt string, args 
 	return err
 }
 
-func (c *conn) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (c *conn) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return sqlscan.Select(ctx, c.conn, dst, stmt, args...)
 }
 
-func (c *conn) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (c *conn) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	rows, err := c.conn.QueryContext(ctx, stmt, args...)
 	return &cursor{rows: rows, initErr: err}
 }
@@ -126,7 +126,7 @@ type tx struct {
 	tx *sql.Tx
 }
 
-func (t *tx) As(i interface{}) bool {
+func (t *tx) As(i any) bool {
 	p, ok := i.(**sql.Tx)
 	if !ok {
 		return false
@@ -135,11 +135,11 @@ func (t *tx) As(i interface{}) bool {
 	return true
 }
 
-func (t *tx) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (t *tx) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	return t.tx.ExecContext(ctx, stmt, args...)
 }
 
-func (t *tx) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (t *tx) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := sqlscan.Get(ctx, t.tx, dst, stmt, args...)
 	if sqlscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
@@ -147,11 +147,11 @@ func (t *tx) QueryOne(ctx context.Context, dst interface{}, stmt string, args ..
 	return err
 }
 
-func (t *tx) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (t *tx) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return sqlscan.Select(ctx, t.tx, dst, stmt, args...)
 }
 
-func (t *tx) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (t *tx) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	rows, err := t.tx.QueryContext(ctx, stmt, args...)
 	return &cursor{rows: rows, initErr: err}
 }
@@ -190,7 +190,7 @@ func (c *cursor) Next() bool {
 	return false
 }
 
-func (c *cursor) Scan(dst interface{}) error {
+func (c *cursor) Scan(dst any) error {
 	if c.rows != nil {
 		return sqlscan.ScanRow(dst, c.rows)
 	}

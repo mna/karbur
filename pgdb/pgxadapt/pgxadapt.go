@@ -178,11 +178,11 @@ func (c *conn) QueryOne(ctx context.Context, dst any, stmt string, args ...any) 
 	return err
 }
 
-func (c *conn) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (c *conn) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return pgxscan.Select(ctx, c.conn, dst, stmt, args...)
 }
 
-func (c *conn) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (c *conn) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	// fine to ignore error here, the rows will be in failed state if there was one
 	rows, _ := c.conn.Query(ctx, stmt, args...)
 	return &cursor{rows: rows}
@@ -192,7 +192,7 @@ type tx struct {
 	tx pgx.Tx
 }
 
-func (t *tx) As(i interface{}) bool {
+func (t *tx) As(i any) bool {
 	p, ok := i.(*pgx.Tx)
 	if !ok {
 		return false
@@ -201,7 +201,7 @@ func (t *tx) As(i interface{}) bool {
 	return true
 }
 
-func (t *tx) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Result, error) {
+func (t *tx) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	res, err := t.tx.Exec(ctx, stmt, args...)
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func (t *tx) Exec(ctx context.Context, stmt string, args ...interface{}) (sql.Re
 	return ToSQLResult(res), nil
 }
 
-func (t *tx) QueryOne(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (t *tx) QueryOne(ctx context.Context, dst any, stmt string, args ...any) error {
 	err := pgxscan.Get(ctx, t.tx, dst, stmt, args...)
 	if pgxscan.NotFound(err) {
 		return fmt.Errorf("not found: %w", sql.ErrNoRows)
@@ -217,11 +217,11 @@ func (t *tx) QueryOne(ctx context.Context, dst interface{}, stmt string, args ..
 	return err
 }
 
-func (t *tx) QueryMany(ctx context.Context, dst interface{}, stmt string, args ...interface{}) error {
+func (t *tx) QueryMany(ctx context.Context, dst any, stmt string, args ...any) error {
 	return pgxscan.Select(ctx, t.tx, dst, stmt, args...)
 }
 
-func (t *tx) Cursor(ctx context.Context, stmt string, args ...interface{}) pgdb.Cursor {
+func (t *tx) Cursor(ctx context.Context, stmt string, args ...any) pgdb.Cursor {
 	// fine to ignore error here, the rows will be in failed state if there was one
 	rows, _ := t.tx.Query(ctx, stmt, args...)
 	return &cursor{rows: rows}
@@ -253,7 +253,7 @@ func (c *cursor) Next() bool {
 	return c.rows.Next()
 }
 
-func (c *cursor) Scan(dst interface{}) error {
+func (c *cursor) Scan(dst any) error {
 	return pgxscan.ScanRow(dst, c.rows)
 }
 

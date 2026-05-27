@@ -30,27 +30,20 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 }
 
 // Tokens manages creation, validation and cleanup of secure, random tokens. It
-// is safe to use concurrently.
+// is safe to use concurrently as long as the pgdb.Connection implementation
+// also is. Fields must not be modified after initialization.
 type Tokens struct {
-	conn         pgdb.Connection
-	rawTokenSize int
+	// Conn is a database connection (which is satisfied by pgdb.Pool, it doesn't
+	// need to be a dedicated connection, it just needs to satisfy the
+	// interface).
+	Conn pgdb.Connection
+	// RawTokenSize is the number of bytes of the randomly-generated token before
+	// base64-encoding. DefaultRawTokenSize is used if it is <= 0.
+	RawTokenSize int
 }
 
 // DefaultRawTokenSize is the size used if not otherwise specified.
 const DefaultRawTokenSize = 32
-
-// New creates a new Tokens manager with the provided database connection
-// (which is satisfied by pgdb.Pool, it doesn't need to be a dedicated
-// connection). If rawTokenSize <= 0, the default size is used.
-func New(conn pgdb.Connection, rawTokenSize int) *Tokens {
-	if rawTokenSize <= 0 {
-		rawTokenSize = DefaultRawTokenSize
-	}
-	return &Tokens{
-		conn:         conn,
-		rawTokenSize: rawTokenSize,
-	}
-}
 
 // TokenArgs configures the token to create.
 type TokenArgs struct {
@@ -74,7 +67,11 @@ type TokenArgs struct {
 // For single-use tokens, if a token already exists for the same Type and
 // RefID, it is replaced by the new token, invalidating the previous one.
 func (t *Tokens) New(ctx context.Context, args TokenArgs) (string, error) {
-	b := make([]byte, t.rawTokenSize)
+	rawTokenSize := t.RawTokenSize
+	if rawTokenSize <= 0 {
+		rawTokenSize = DefaultRawTokenSize
+	}
+	b := make([]byte, rawTokenSize)
 	_, _ = rand.Read(b)
 	token := base64.RawURLEncoding.EncodeToString(b)
 
@@ -94,7 +91,7 @@ UPDATE SET
   "token" = EXCLUDED."token",
   "expiry" = EXCLUDED."expiry"
 `
-	err := pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
+	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID, int64(args.Expiry/time.Second))
 		return err
 	})
@@ -147,7 +144,7 @@ WHERE
   "expiry" > now()
 `
 	var tok Token
-	err := pgdb.EnsureTx(ctx, t.conn, func(ctx context.Context, tx pgdb.Txer) error {
+	err := pgdb.EnsureTx(ctx, t.Conn, func(ctx context.Context, tx pgdb.Txer) error {
 		if err := tx.QueryOne(ctx, &tok, getToken, token); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrInvalid
@@ -206,7 +203,7 @@ DELETE FROM
 WHERE
   "token" = $1
 `
-	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, deleteToken, token)
 		return err
 	})
@@ -224,7 +221,7 @@ WHERE
   "ref_id" = $1 AND
   "type" = $2
 `
-	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, deleteTokens, tokenRefID, tokenType)
 		return err
 	})
@@ -236,7 +233,7 @@ WHERE
 // "tokens_cleanup" procedure instead of doing the cleanup via this function.
 func (t *Tokens) Cleanup(ctx context.Context) error {
 	const cleanupTokens = `CALL tokens_cleanup();`
-	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, cleanupTokens)
 		return err
 	})

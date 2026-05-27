@@ -28,15 +28,9 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 }
 
 type Accounts struct {
-	conn pgdb.Connection
-	dec  *params.Decoder
-}
-
-func New(conn pgdb.Connection, dec *params.Decoder) *Accounts {
-	return &Accounts{
-		conn: conn,
-		dec:  dec,
-	}
+	Conn          pgdb.Connection
+	ParamsDecoder *params.Decoder
+	ErrorHandler  func(code int, err error, w http.ResponseWriter, r *http.Request)
 }
 
 type registerInput struct {
@@ -69,7 +63,7 @@ func (a *Accounts) Register() func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var input registerInput
-			if err := a.dec.Decode(r, &input); err != nil {
+			if err := a.ParamsDecoder.Decode(r, &input); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
