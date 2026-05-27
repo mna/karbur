@@ -29,6 +29,29 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 	return mig.Register("karbur/tokens", nil, root)
 }
 
+// Tokens manages creation, validation and cleanup of secure, random tokens. It
+// is safe to use concurrently.
+type Tokens struct {
+	conn         pgdb.Connection
+	rawTokenSize int
+}
+
+// DefaultRawTokenSize is the size used if not otherwise specified.
+const DefaultRawTokenSize = 32
+
+// New creates a new Tokens manager with the provided database connection
+// (which is satisfied by pgdb.Pool, it doesn't need to be a dedicated
+// connection). If rawTokenSize <= 0, the default size is used.
+func New(conn pgdb.Connection, rawTokenSize int) *Tokens {
+	if rawTokenSize <= 0 {
+		rawTokenSize = DefaultRawTokenSize
+	}
+	return &Tokens{
+		conn:         conn,
+		rawTokenSize: rawTokenSize,
+	}
+}
+
 // TokenArgs configures the token to create.
 type TokenArgs struct {
 	// Type is an application-defined type of token.
@@ -44,17 +67,14 @@ type TokenArgs struct {
 	Expiry time.Duration
 }
 
-const rawTokenSize = 32
-
-// New generates a new random, secure token configured according to args.
-// It uses the existing DB transaction if there is one, otherwise it uses q.
-// The token is base64-url-encoded so it is safe to use in URLs and cookies if
-// needed.
+// New generates a new random, secure token configured according to args. It
+// uses the existing DB transaction if there is one. The token is
+// base64-url-encoded so it is safe to use in URLs and cookies if needed.
 //
 // For single-use tokens, if a token already exists for the same Type and
 // RefID, it is replaced by the new token, invalidating the previous one.
-func New(ctx context.Context, q pgdb.Queryer, args TokenArgs) (string, error) {
-	b := make([]byte, rawTokenSize)
+func (t *Tokens) New(ctx context.Context, args TokenArgs) (string, error) {
+	b := make([]byte, t.rawTokenSize)
 	_, _ = rand.Read(b)
 	token := base64.RawURLEncoding.EncodeToString(b)
 
@@ -74,7 +94,7 @@ UPDATE SET
   "token" = EXCLUDED."token",
   "expiry" = EXCLUDED."expiry"
 `
-	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+	err := pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID, int64(args.Expiry/time.Second))
 		return err
 	})
@@ -99,7 +119,7 @@ const ErrInvalid = errors.ConstError("invalid token")
 
 // Verify loads and verifies if the provided token is valid. If the token is
 // single-use, it is deleted after load as it is not valid anymore. It uses the
-// existing DB transaction if there is one, otherwise starts one with btx.
+// existing DB transaction if there is one.
 //
 // The vfn argument is extra validation to apply on the token before
 // considering it valid. The MustMatchType and MustMatchTypeAndRefID functions
@@ -112,7 +132,7 @@ const ErrInvalid = errors.ConstError("invalid token")
 //     MustMatchTypeAndRefID should be used to verify it has the expected type
 //     and ref_id (which should be known, as the user typically enters the
 //     account's email address in addition to the reset token).
-func Verify(ctx context.Context, btx pgdb.BeginTxer, token string, vfn func(*Token) error) (*Token, error) {
+func (t *Tokens) Verify(ctx context.Context, token string, vfn func(*Token) error) (*Token, error) {
 	const getToken = `
 SELECT
   "token",
@@ -127,7 +147,7 @@ WHERE
   "expiry" > now()
 `
 	var tok Token
-	err := pgdb.EnsureTx(ctx, btx, func(ctx context.Context, tx pgdb.Txer) error {
+	err := pgdb.EnsureTx(ctx, t.conn, func(ctx context.Context, tx pgdb.Txer) error {
 		if err := tx.QueryOne(ctx, &tok, getToken, token); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrInvalid
@@ -137,7 +157,7 @@ WHERE
 
 		// if the token is single-use, delete it as it is now consumed
 		if tok.SingleUse {
-			if err := Delete(ctx, tx, token); err != nil {
+			if err := t.Delete(ctx, token); err != nil {
 				return err
 			}
 		}
@@ -177,16 +197,16 @@ func MustMatchTypeAndRefID(t string, refID int64) func(*Token) error {
 	}
 }
 
-// Delete deletes the specified token, regardless of its expiry. It uses
-// the existing DB transaction if there is one, otherwise it uses q.
-func Delete(ctx context.Context, q pgdb.Queryer, token string) error {
+// Delete deletes the specified token, regardless of its expiry. It uses the
+// existing DB transaction if there is one.
+func (t *Tokens) Delete(ctx context.Context, token string) error {
 	const deleteToken = `
 DELETE FROM
   "tokens_tokens"
 WHERE
   "token" = $1
 `
-	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, deleteToken, token)
 		return err
 	})
@@ -195,8 +215,8 @@ WHERE
 // DeleteByTypeRef deletes all tokens with the specified tokenType and
 // tokenRefID. This is meant for scenarios like when all session IDs should be
 // invalidated for a given user, or canceling a password reset operation. It
-// uses the existing DB transaction if there is one, otherwise it uses q.
-func DeleteByTypeRef(ctx context.Context, q pgdb.Queryer, tokenType string, tokenRefID int64) error {
+// uses the existing DB transaction if there is one.
+func (t *Tokens) DeleteByTypeRef(ctx context.Context, tokenType string, tokenRefID int64) error {
 	const deleteTokens = `
 DELETE FROM
   "tokens_tokens"
@@ -204,20 +224,19 @@ WHERE
   "ref_id" = $1 AND
   "type" = $2
 `
-	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, deleteTokens, tokenRefID, tokenType)
 		return err
 	})
 }
 
 // Cleanup deletes all expired tokens from the table. It uses the existing DB
-// transaction if there is one, otherwise it uses q. For databases with the
-// pg_cron extension, it is also possible to schedule a recurring database job
-// that calls the "tokens_cleanup" procedure instead of doing the cleanup via
-// this function.
-func Cleanup(ctx context.Context, q pgdb.Queryer) error {
+// transaction if there is one. For databases with the pg_cron extension, it is
+// also possible to schedule a recurring database job that calls the
+// "tokens_cleanup" procedure instead of doing the cleanup via this function.
+func (t *Tokens) Cleanup(ctx context.Context) error {
 	const cleanupTokens = `CALL tokens_cleanup();`
-	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+	return pgdb.EnsureQueryer(ctx, t.conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, cleanupTokens)
 		return err
 	})

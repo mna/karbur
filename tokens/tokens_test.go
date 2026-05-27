@@ -40,8 +40,10 @@ func TestPool(t *testing.T) {
 			err = mig.Migrate(ctx)
 			require.NoError(t, err)
 
+			tt := New(pool, 0)
+
 			// create a token without a type
-			_, err = New(ctx, pool, TokenArgs{
+			_, err = tt.New(ctx, TokenArgs{
 				Type:      "",
 				RefID:     1,
 				SingleUse: true,
@@ -51,7 +53,7 @@ func TestPool(t *testing.T) {
 			require.ErrorContains(t, err, "SQLSTATE 23514") // violates check constraint
 
 			// create a single-use token
-			tok1, err := New(ctx, pool, TokenArgs{
+			tok1, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     1,
 				SingleUse: true,
@@ -61,18 +63,18 @@ func TestPool(t *testing.T) {
 			require.NotEmpty(t, tok1)
 
 			// verify the token
-			dbtok, err := Verify(ctx, pool, tok1, MustMatchTypeAndRefID("test", 1))
+			dbtok, err := tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", 1))
 			require.NoError(t, err)
 			require.Equal(t, tok1, dbtok.Token)
 			require.WithinDuration(t, time.Now().Add(time.Minute), dbtok.Expiry, 2*time.Second)
 
 			// verify the token again, now invalid
-			_, err = Verify(ctx, pool, tok1, MustMatchTypeAndRefID("test", 1))
+			_, err = tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", 1))
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrInvalid)
 
 			// create another single-use token
-			tok2a, err := New(ctx, pool, TokenArgs{
+			tok2a, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     2,
 				SingleUse: true,
@@ -82,7 +84,7 @@ func TestPool(t *testing.T) {
 			require.NotEmpty(t, tok2a)
 
 			// generate another for the same type/ref, will replace it
-			tok2b, err := New(ctx, pool, TokenArgs{
+			tok2b, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     2,
 				SingleUse: true,
@@ -93,15 +95,15 @@ func TestPool(t *testing.T) {
 			require.NotEqual(t, tok2a, tok2b)
 
 			// verify the initial token, invalid
-			_, err = Verify(ctx, pool, tok2a, nil)
+			_, err = tt.Verify(ctx, tok2a, nil)
 			require.ErrorIs(t, err, ErrInvalid)
 
 			// verify the new token, valid
-			_, err = Verify(ctx, pool, tok2b, nil)
+			_, err = tt.Verify(ctx, tok2b, nil)
 			require.NoError(t, err)
 
 			// generate a multi-use token
-			tok3, err := New(ctx, pool, TokenArgs{
+			tok3, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     3,
 				SingleUse: false,
@@ -111,22 +113,22 @@ func TestPool(t *testing.T) {
 			require.NotEmpty(t, tok3)
 
 			// verify it, valid
-			dbtok, err = Verify(ctx, pool, tok3, MustMatchType("test"))
+			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
 			require.Equal(t, tok3, dbtok.Token)
 			require.EqualValues(t, 3, dbtok.RefID)
 
 			// verify it with a non-matching type, invalid
-			_, err = Verify(ctx, pool, tok3, MustMatchType("NO-SUCH-TYPE"))
+			_, err = tt.Verify(ctx, tok3, MustMatchType("NO-SUCH-TYPE"))
 			require.ErrorIs(t, err, ErrInvalid)
 
 			// verify it again, still valid
-			dbtok, err = Verify(ctx, pool, tok3, MustMatchType("test"))
+			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
 			require.EqualValues(t, 3, dbtok.RefID)
 
 			// can create another multi-use for the same type/ref
-			tok4, err := New(ctx, pool, TokenArgs{
+			tok4, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     3,
 				SingleUse: false,
@@ -137,15 +139,15 @@ func TestPool(t *testing.T) {
 			require.NotEqual(t, tok3, tok4)
 
 			// both are still valid
-			dbtok, err = Verify(ctx, pool, tok3, MustMatchType("test"))
+			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
 			require.EqualValues(t, 3, dbtok.RefID)
-			dbtok, err = Verify(ctx, pool, tok4, MustMatchType("test"))
+			dbtok, err = tt.Verify(ctx, tok4, MustMatchType("test"))
 			require.NoError(t, err)
 			require.EqualValues(t, 3, dbtok.RefID)
 
 			// create a short-lived multi-use
-			tok5, err := New(ctx, pool, TokenArgs{
+			tok5, err := tt.New(ctx, TokenArgs{
 				Type:      "test",
 				RefID:     5,
 				SingleUse: false,
@@ -158,7 +160,7 @@ func TestPool(t *testing.T) {
 			time.Sleep(time.Second + time.Millisecond)
 
 			// it is now invalid
-			_, err = Verify(ctx, pool, tok5, nil)
+			_, err = tt.Verify(ctx, tok5, nil)
 			require.ErrorIs(t, err, ErrInvalid)
 
 			var countBefore int
@@ -168,7 +170,7 @@ func TestPool(t *testing.T) {
 
 			// call the cleanup of expired tokens
 			var countAfter int
-			err = Cleanup(ctx, pool)
+			err = tt.Cleanup(ctx)
 			require.NoError(t, err)
 			err = pool.QueryOne(ctx, &countAfter, `SELECT COUNT(*) FROM tokens_tokens;`)
 			require.NoError(t, err)
@@ -176,7 +178,7 @@ func TestPool(t *testing.T) {
 
 			// calling again is a no-op
 			var countLast int
-			err = Cleanup(ctx, pool)
+			err = tt.Cleanup(ctx)
 			require.NoError(t, err)
 			err = pool.QueryOne(ctx, &countLast, `SELECT COUNT(*) FROM tokens_tokens;`)
 			require.NoError(t, err)
