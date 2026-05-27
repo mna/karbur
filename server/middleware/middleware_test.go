@@ -421,7 +421,7 @@ func TestRequestTimeouts(t *testing.T) {
 	}
 }
 
-func TestFileServerCustomErrors(t *testing.T) {
+func TestCustomErrors(t *testing.T) {
 	// make permission.txt write-only
 	err := os.Chmod("testdata/fileserver/permission.txt", 0o200)
 	require.NoError(t, err)
@@ -429,7 +429,7 @@ func TestFileServerCustomErrors(t *testing.T) {
 		_ = os.Chmod("testdata/fileserver/permission.txt", 0o600)
 	})
 
-	mw := FileServerCustomErrors(func(code int, w http.ResponseWriter, r *http.Request) (handled bool) {
+	mw := CustomErrors(func(code int, w http.ResponseWriter, r *http.Request) (handled bool) {
 		switch code {
 		case http.StatusNotFound:
 			http.Error(w, "custom", 444)

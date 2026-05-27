@@ -533,11 +533,16 @@ func RequestTimeouts(readTimeout, writeTimeout time.Duration) func(http.Handler)
 	}
 }
 
-// FileServerCustomErrors returns a middleware that wraps a file server handler
-// (e.g. http.FileServer or http.FileServerFS) and directs any error (status
-// code >= 400) to the custom error handler, that can decide to handle it or
-// fallback to the default handling.
-func FileServerCustomErrors(
+// CustomErrors returns a middleware that wraps a handler (e.g. http.FileServer
+// or any handler that writes errors in a simple, straightforward sequence of
+// calls to w.WriteHeader followed by w.Write, such as calls to the http.Error
+// function) and directs any error (status code >= 400) to the custom error
+// handler, that can decide to handle it or fallback to the default handling.
+//
+// The custom error function should ensure the response headers are properly
+// set if it handles the error, no special handling of headers is done by the
+// middleware.
+func CustomErrors(
 	errHandler func(code int, w http.ResponseWriter, r *http.Request) (handled bool),
 ) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
