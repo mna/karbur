@@ -38,25 +38,23 @@ func (i *registerInput) Validate() error {
 	return nil
 }
 
-func (a *Accounts) Register() func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var input registerInput
-			if err := a.ParamsDecoder.Decode(r, &input); err != nil {
-				if !errors.IsTag(err, AccountsTag) {
-					err = errors.Tag(err, AccountsTag, "code", "400", "action", string(ActionRegister))
-				}
-				a.ErrorHandler(w, r, err)
-				return
+func (a *Accounts) Register(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var input registerInput
+		if err := a.ParamsDecoder.Decode(r, &input); err != nil {
+			if !errors.IsTag(err, AccountsTag) {
+				err = errors.Tag(err, AccountsTag, "code", "400", "action", string(ActionRegister))
 			}
+			a.ErrorHandler(w, r, err)
+			return
+		}
 
-			if _, err := a.register(r.Context(), input.Email, input.Password); err != nil {
-				a.ErrorHandler(w, r, err)
-				return
-			}
-			h.ServeHTTP(w, r)
-		})
-	}
+		if _, err := a.register(r.Context(), input.Email, input.Password); err != nil {
+			a.ErrorHandler(w, r, err)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (a *Accounts) register(ctx context.Context, email, password string) (int64, error) {
@@ -84,9 +82,20 @@ RETURNING
 	err = pgdb.EnsureQueryer(ctx, a.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		return q.QueryOne(ctx, &id, insertAccount, email, hashedPwd)
 	})
-	if err != nil && pgdb.SQLState(err) == pgerrcode.UniqueViolation {
-		return id, errors.Tag(err, AccountsTag,
-			"code", "409", "parameter", "email", "actions", string(ActionRegister))
+	if err != nil {
+		switch pgdb.SQLState(err) {
+		case pgerrcode.UniqueViolation:
+			return id, errors.Tag(err, AccountsTag,
+				"code", "409", "parameter", "email", "actions", string(ActionRegister))
+
+		// TODO: improve this with a clearer message (name the constraint?)
+		case pgerrcode.CheckViolation:
+			// could technically be the password hash that is too long, but since we
+			// control the argon2 parameters, this should be caught before going to
+			// production, so we assume this is the email too long.
+			return id, errors.Tag(err, AccountsTag,
+				"code", "400", "parameter", "email", "actions", string(ActionRegister))
+		}
 	}
 	return id, err
 }

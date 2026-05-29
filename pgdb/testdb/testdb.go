@@ -41,7 +41,7 @@ func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) 
 			_, _ = db.ExecContext(ctx, "DROP DATABASE IF EXISTS "+tempDB+" WITH (FORCE)")
 			_, _ = db.ExecContext(ctx, "DROP USER IF EXISTS "+tempDB)
 		}
-		db.Close()
+		_ = db.Close()
 	})
 
 	conf := connConfig(t, connStr, tempDB)
@@ -50,7 +50,7 @@ func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { tdb.Close() })
+	t.Cleanup(func() { _ = tdb.Close() })
 	if err := tdb.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer conn.Close()
+		defer conn.Close() //nolint
 		for _, fn := range fns {
 			if err := fn(conn); err != nil {
 				t.Fatal(err)
@@ -96,7 +96,7 @@ func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) 
 			_, _ = conn.Exec(ctx, "DROP DATABASE IF EXISTS "+tempDB+" WITH (FORCE)")
 			_, _ = conn.Exec(ctx, "DROP USER IF EXISTS "+tempDB)
 		}
-		conn.Close(ctx)
+		_ = conn.Close(ctx)
 	})
 
 	conf := poolConnConfig(t, connStr, tempDB)
@@ -316,14 +316,14 @@ func connConfig(t testing.TB, original, tempDB string) *pgx.ConnConfig {
 }
 
 type execer interface {
-	Exec(context.Context, string, ...interface{}) (interface{}, error)
+	Exec(context.Context, string, ...any) (any, error)
 }
 
 type sqlDBExecer struct {
 	db *sql.DB
 }
 
-func (e *sqlDBExecer) Exec(ctx context.Context, stmt string, args ...interface{}) (interface{}, error) {
+func (e *sqlDBExecer) Exec(ctx context.Context, stmt string, args ...any) (any, error) {
 	return e.db.ExecContext(ctx, stmt, args...)
 }
 
@@ -331,7 +331,7 @@ type sqlConnExecer struct {
 	conn *sql.Conn
 }
 
-func (e *sqlConnExecer) Exec(ctx context.Context, stmt string, args ...interface{}) (interface{}, error) {
+func (e *sqlConnExecer) Exec(ctx context.Context, stmt string, args ...any) (any, error) {
 	return e.conn.ExecContext(ctx, stmt, args...)
 }
 
@@ -339,7 +339,7 @@ type pgxExecer struct {
 	conn *pgx.Conn
 }
 
-func (e *pgxExecer) Exec(ctx context.Context, stmt string, args ...interface{}) (interface{}, error) {
+func (e *pgxExecer) Exec(ctx context.Context, stmt string, args ...any) (any, error) {
 	return e.conn.Exec(ctx, stmt, args...)
 }
 
