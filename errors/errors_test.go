@@ -112,64 +112,6 @@ func TestHasKey(t *testing.T) {
 	}
 }
 
-func TestHasKeyValue(t *testing.T) {
-	const wantKey, wantValue = "x", "1"
-	cases := []struct {
-		desc string
-		err  error
-		want bool
-	}{
-		{"nil", nil, false},
-		{"not tagged", constErr, false},
-		{"key not value", Tag(constErr, testTag, "x"), false},
-		{"key and value", Tag(constErr, testTag, "x", "1"), true},
-		{"wrapped match", Errorf("wrap: %w", Tag(constErr, testTag, "x", "1")), true},
-		{"wrapped mismatch", Errorf("wrap: %w", Tag(constErr, testTag, "x", "2")), false},
-		{"multi keys match", Tag(constErr, testTag, "v", "1", "w", "2", "x", "1", "y"), true},
-		{"multi keys mismatch", Tag(constErr, testTag, "v", "1", "w", "2", "x", "3", "y"), false},
-		{"multi wrap match", Tag(Errorf("wrap: %w", Tag(constErr, testTag, "x", "1")), testTag, "v", "1"), true},
-		{"multi wrap mismatch", Tag(Errorf("wrap: %w", Tag(constErr, testTag, "x", "2")), testTag, "v", "1"), false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ok := HasKeyValue(tc.err, wantKey, wantValue)
-			require.Equal(t, tc.want, ok)
-		})
-	}
-}
-
-func TestHasCode(t *testing.T) {
-	cases := []struct {
-		desc  string
-		err   error
-		codes []int
-		want  bool
-	}{
-		{"nil", nil, []int{1}, false},
-		{"not tagged", constErr, []int{1}, false},
-		{"other key not value", Tag(constErr, testTag, "x"), []int{1}, false},
-		{"other key and value", Tag(constErr, testTag, "x", "1"), []int{1}, false},
-		{"other key and code match", Tag(constErr, testTag, "x", "1", "code", "1"), []int{1}, true},
-		{"other key and code no match", Tag(constErr, testTag, "x", "1", "code", "a"), []int{1}, false},
-		{"wrapped match", Errorf("wrap: %w", Tag(constErr, testTag, "code", "1")), []int{1}, true},
-		{"wrapped mismatch", Errorf("wrap: %w", Tag(constErr, testTag, "code", "2")), []int{1}, false},
-		{"multi codes match", Tag(constErr, testTag, "code", "1", "w", "2", "code", "1", "y"), []int{1}, true},
-		{"multi codes mismatch", Tag(constErr, testTag, "v", "1", "codes", "2", "codes", "3", "y"), []int{1}, false},
-		{"multi wrap match", Tag(Errorf("wrap: %w", Tag(constErr, testTag, "code", "1")), testTag, "code", "2"), []int{1}, true},
-		{"multi wrap mismatch", Tag(Errorf("wrap: %w", Tag(constErr, testTag, "code", "2")), testTag, "v", "1"), []int{1}, false},
-		{"wrapped match one of many", Errorf("wrap: %w", Tag(constErr, testTag, "code", "2")), []int{1, 2, 3}, true},
-		{"wrapped match none of many", Errorf("wrap: %w", Tag(constErr, testTag, "code", "2")), []int{1, 3}, false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ok := HasCode(tc.err, tc.codes...)
-			require.Equal(t, tc.want, ok)
-		})
-	}
-}
-
 func TestCode(t *testing.T) {
 	cases := []struct {
 		desc string

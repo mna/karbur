@@ -175,19 +175,6 @@ func HasKey(e error, key string) bool {
 	return false
 }
 
-// HasKeyValue returns true if e or any error in its chain has been tagged with
-// the specified key and value.
-func HasKeyValue(e error, key, value string) bool {
-	var te taggedError
-	if As(e, &te) {
-		if v, ok := te.meta[key]; ok && v == value {
-			return true
-		}
-		return HasKeyValue(te.Unwrap(), key, value)
-	}
-	return false
-}
-
 // KeyValue returns the value associated with the specified key if any error in
 // the chain has been tagged with it. If no such error exists, it returns an
 // empty string.
@@ -200,35 +187,6 @@ func KeyValue(e error, key string) string {
 		return KeyValue(te.Unwrap(), key)
 	}
 	return ""
-}
-
-// HasCode returns true if e or any error in its chain has been tagged with any
-// of the provided code values. The "code" key is a special key that, if
-// present and its value is an integer, is interpreted as the error code.
-func HasCode(e error, codes ...int) bool {
-	if e == nil || len(codes) == 0 {
-		return false
-	}
-
-	// naive implementation would be to call HasKeyValue for each code,
-	// but it would be slow to walk the error chain each time, so we implement
-	// an optimized version.
-	lookup := make(map[string]bool, len(codes))
-	for _, code := range codes {
-		lookup[fmt.Sprint(code)] = true
-	}
-	return hasCode(e, lookup)
-}
-
-func hasCode(e error, lookup map[string]bool) bool {
-	var te taggedError
-	if As(e, &te) {
-		if v, ok := te.meta[CodeKey]; ok && lookup[v] {
-			return true
-		}
-		return hasCode(te.Unwrap(), lookup)
-	}
-	return false
 }
 
 // Code returns the integer value of the "code" key in the error metadata, if

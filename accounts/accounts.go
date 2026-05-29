@@ -28,18 +28,24 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 }
 
 type Accounts struct {
-	Conn          pgdb.Connection
+	// Conn is a database connection (which is satisfied by pgdb.Pool, it doesn't
+	// need to be a dedicated connection, it just needs to satisfy the
+	// interface).
+	Conn pgdb.Connection
+
+	// ParamsDecoder is the params.Decoder to use to decode HTTP parameters.
 	ParamsDecoder *params.Decoder
-	ErrorHandler  func(code int, err error, w http.ResponseWriter, r *http.Request)
+
+	// ErrorHandler is called to render the response in case of an error in one
+	// of the Accounts middleware handlers. The error can be queried for its Code
+	// via errors.Code for the recommended HTTP status code to use
+	ErrorHandler func(w http.ResponseWriter, r *http.Request, err error)
 }
 
 type registerInput struct {
 	Email     string `schema:"email" json:"email"`
 	Password  string `schema:"password" json:"password"`
 	Password2 string `schema:"password2" json:"password2"`
-	// TODO: groups shouldn't be allowed on register if the endpoint is
-	// wide-open. Can be useful if accounts are admin-created.
-	Groups []string `schema:"groups" json:"groups"`
 }
 
 func (i *registerInput) Validate() error {
