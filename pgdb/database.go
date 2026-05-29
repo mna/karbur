@@ -182,3 +182,18 @@ var likeEscReplacer = strings.NewReplacer(
 func LikeEsc(s string) string {
 	return likeEscReplacer.Replace(s)
 }
+
+type sqlstateError interface {
+	error
+	SQLState() string
+}
+
+// SQLState returns the postgres SQL state code of err or any error in its
+// chain, if any implements the SQLState method. It returns an empty string
+// if no error in the chain implement this method.
+func SQLState(err error) string {
+	if ssErr, ok := errors.AsType[sqlstateError](err); ok {
+		return ssErr.SQLState()
+	}
+	return ""
+}

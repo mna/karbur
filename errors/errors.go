@@ -108,6 +108,12 @@ func (e taggedError) Unwrap() error {
 	return e.err
 }
 
+// TagNew is a convenience function for errors.New followed by errors.Tag.
+func TagNew(msg string, tag ErrorTag, kvpairs ...string) error {
+	err := New(msg)
+	return Tag(err, tag, kvpairs...)
+}
+
 // Tag returns an error that wraps e and tags it with the provided error tag.
 // Errors can be queried for tags with IsTag. An arbitrary set of key-value
 // pairs can also be provided and will be stored in the error and printed in

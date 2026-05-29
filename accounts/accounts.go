@@ -8,12 +8,12 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
-	"strings"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
 	"codeberg.org/mna/karbur/server/params"
+	"github.com/alexedwards/argon2id"
 )
 
 //go:embed migrations
@@ -37,44 +37,29 @@ type Accounts struct {
 	ParamsDecoder *params.Decoder
 
 	// ErrorHandler is called to render the response in case of an error in one
-	// of the Accounts middleware handlers. The error can be queried for its Code
-	// via errors.Code for the recommended HTTP status code to use
+	// of the Accounts middleware handlers.
+	//
+	// The error can be queried for meta-information to help proper handling:
+	//   * its code (via errors.Code) is the recommended HTTP status code to use
+	//   * its "parameter" key (via errors.KeyValue) indicates the specific
+	//   parameter that failed the validation, if any
+	//   * its "action" key (via errors.KeyValue) indicates the action that
+	//   failed, e.g. "register" (see the Action constants)
+	//
+	// Internal server errors (e.g. database uneachable) are not tagged and do
+	// not typically carry additional information, so the fallback should be to
+	// render a 500 response.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, err error)
+
+	// Argon2Params are the argon2 parameters to use to hash passwords for
+	// storage and verification. If nil, argon2id.DefaultParams are used.
+	Argon2Params *argon2id.Params
 }
 
-type registerInput struct {
-	Email     string `schema:"email" json:"email"`
-	Password  string `schema:"password" json:"password"`
-	Password2 string `schema:"password2" json:"password2"`
-}
+const AccountsTag = errors.ErrorTag("accounts")
 
-func (i *registerInput) Validate() error {
-	before, after, _ := strings.Cut(i.Email, "@")
-	if before == "" || after == "" {
-		if i.Email == "" {
-			return errors.New("email is missing")
-		}
-		return errors.New("invalid email")
-	}
-	if i.Password == "" {
-		return errors.New("password is missing")
-	}
-	if i.Password != i.Password2 {
-		return errors.New("passwords do not match")
-	}
-	return nil
-}
+type Action string
 
-func (a *Accounts) Register() func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var input registerInput
-			if err := a.ParamsDecoder.Decode(r, &input); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			// TODO: support creating with a generated password, and require changing
-			// it on first login? Support login with an email token?
-		})
-	}
-}
+const (
+	ActionRegister Action = "register"
+)
