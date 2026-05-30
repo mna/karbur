@@ -1,3 +1,5 @@
+// Package testdb provides functions to test a pgdb project using a real,
+// non-mocked but isolated test database.
 package testdb
 
 import (
@@ -12,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/lib/pq"
 )
 
 var ctx = context.Background()
@@ -25,12 +28,33 @@ var ctx = context.Background()
 // the newly created test database to execute any setup required before the
 // test. The MockPgcronSQL function from this package is one such function that
 // can be used in this context.
+//
+// It uses the pgx SQL driver from github.com/jackc/pgx/v5/stdlib.
 func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
+	return newSQL(t, "pgx", connStr, prefix, fns...)
+}
+
+// NewPqSQL creates a temporary test database and returns a *sql.DB
+// that connects to it. The database is automatically dropped in the test
+// cleanup phase, unless the PGDB_KEEP_TESTDB environment variable is set.
+// If prefix is the empty string, "test" is used by default.
+//
+// If any fns are provided, they are called in order with a connection to
+// the newly created test database to execute any setup required before the
+// test. The MockPgcronSQL function from this package is one such function that
+// can be used in this context.
+//
+// It uses the postgres SQL driver from github.com/lib/pq.
+func NewPqSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
+	return newSQL(t, "postgres", connStr, prefix, fns...)
+}
+
+func newSQL(t testing.TB, driver, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
 	if prefix == "" {
 		prefix = "test"
 	}
 
-	db, err := sql.Open("pgx", connStr)
+	db, err := sql.Open(driver, connStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +114,6 @@ func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) 
 	}
 
 	tempDB := createTestDBAndUser(t, &pgxExecer{conn: conn}, prefix)
-	t.Logf("database name: %s", tempDB)
 	t.Cleanup(func() {
 		if os.Getenv("PGDB_KEEP_TESTDB") == "" {
 			_, _ = conn.Exec(ctx, "DROP DATABASE IF EXISTS "+tempDB+" WITH (FORCE)")
@@ -361,6 +384,7 @@ func createTestDBAndUser(t testing.TB, ex execer, prefix string) string {
 	if _, err := ex.Exec(ctx, "ALTER DATABASE "+tempDB+" OWNER TO "+tempDB); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("database name: %s", tempDB)
 	return tempDB
 }
 

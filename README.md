@@ -32,6 +32,7 @@ as needed):
 * `PGCONNECT_TIMEOUT=10`
 * `PGUSER=postgres`
 * `PGDATABASE=postgres`
+* `PGSSLMODE=prefer`
 
 Extra variables are required for the TLS tests, created automatically by the
 `cert_init.bash` script:

@@ -97,6 +97,7 @@ func TestMigrator(t *testing.T) {
 	}{
 		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
 		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run("Migrate:"+tc.name, func(t *testing.T) {

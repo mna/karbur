@@ -10,7 +10,7 @@ import (
 )
 
 func TestEnvVars(t *testing.T) {
-	b, err := os.ReadFile("../README.md")
+	b, err := os.ReadFile("README.md")
 	if err != nil {
 		t.Fatal(err)
 	}

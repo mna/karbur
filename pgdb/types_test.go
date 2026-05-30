@@ -1,6 +1,7 @@
 package pgdb_test
 
 import (
+	"slices"
 	"testing"
 
 	"codeberg.org/mna/karbur/pgdb"
@@ -13,12 +14,15 @@ import (
 // Tests marshaling of types to database types, handling of nulls, varchar
 // limits, etc. across the supported drivers.
 func TestTypes(t *testing.T) {
+	noJSONMarshaling := []string{"sql", "pq"}
+
 	cases := []struct {
 		name  string
 		setup func() pgdb.Pool
 	}{
 		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
 		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,7 +73,7 @@ func TestTypes(t *testing.T) {
 			})
 
 			t.Run("JSONStructPtr", func(t *testing.T) {
-				if tc.name == "sql" {
+				if slices.Contains(noJSONMarshaling, tc.name) {
 					t.Skipf("JSON marshaling not supported in driver %s", tc.name)
 				}
 
@@ -87,7 +91,7 @@ func TestTypes(t *testing.T) {
 			})
 
 			t.Run("JSONMapNil", func(t *testing.T) {
-				if tc.name == "sql" {
+				if slices.Contains(noJSONMarshaling, tc.name) {
 					t.Skipf("JSON marshaling not supported in driver %s", tc.name)
 				}
 
