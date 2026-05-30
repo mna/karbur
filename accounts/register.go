@@ -3,7 +3,6 @@ package accounts
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
@@ -18,18 +17,11 @@ type registerInput struct {
 }
 
 func (i *registerInput) Validate() error {
-	before, after, _ := strings.Cut(i.Email, "@")
-	if before == "" || after == "" {
-		if i.Email == "" {
-			return errors.TagNew("email is missing", AccountsTag,
-				"code", "400", "parameter", "email", "action", string(ActionRegister))
-		}
-		return errors.TagNew("invalid email", AccountsTag,
-			"code", "400", "parameter", "email", "action", string(ActionRegister))
+	if err := validateEmail(i.Email, ActionRegister); err != nil {
+		return err
 	}
-	if i.Password == "" {
-		return errors.TagNew("password is missing", AccountsTag,
-			"code", "400", "parameter", "password", "action", string(ActionRegister))
+	if err := validatePassword(i.Password, ActionRegister); err != nil {
+		return err
 	}
 	if i.Password != i.Password2 {
 		return errors.TagNew("passwords do not match", AccountsTag,

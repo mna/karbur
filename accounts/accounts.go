@@ -8,6 +8,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
@@ -46,7 +47,7 @@ type Accounts struct {
 	//   * its "action" key (via errors.KeyValue) indicates the action that
 	//   failed, e.g. "register" (see the Action constants)
 	//
-	// Internal server errors (e.g. database uneachable) are not tagged and do
+	// Internal server errors (e.g. database unreachable) are not tagged and do
 	// not typically carry additional information, so the fallback should be to
 	// render a 500 response.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, err error)
@@ -62,4 +63,26 @@ type Action string
 
 const (
 	ActionRegister Action = "register"
+	ActionLogin    Action = "login"
 )
+
+func validateEmail(email string, act Action) error {
+	before, after, _ := strings.Cut(email, "@")
+	if before == "" || after == "" {
+		if email == "" {
+			return errors.TagNew("email is missing", AccountsTag,
+				"code", "400", "parameter", "email", "action", string(act))
+		}
+		return errors.TagNew("invalid email", AccountsTag,
+			"code", "400", "parameter", "email", "action", string(act))
+	}
+	return nil
+}
+
+func validatePassword(pwd string, act Action) error {
+	if pwd == "" {
+		return errors.TagNew("password is missing", AccountsTag,
+			"code", "400", "parameter", "password", "action", string(act))
+	}
+	return nil
+}
