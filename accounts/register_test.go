@@ -31,6 +31,7 @@ func TestRegister(t *testing.T) {
 	}{
 		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
 		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -119,14 +120,14 @@ func TestRegister(t *testing.T) {
 					contentType: "application/json",
 					body:        fmt.Appendf(nil, `{"email":"%s@b", "password":"123", "password2":"123"}`, strings.Repeat("a", 254)),
 					wantCode:    http.StatusBadRequest,
-					wantErr:     `violates check constraint "accounts_accounts_email_check"`,
+					wantErr:     `accounts: email is too long`,
 				},
 				{
 					desc:        "duplicate",
 					contentType: "application/x-www-form-urlencoded",
 					body:        []byte(url.Values{"email": {"a@b"}, "password": {"123"}, "password2": {"123"}}.Encode()),
 					wantCode:    http.StatusConflict,
-					wantErr:     `violates unique constraint "accounts_accounts_email_key"`,
+					wantErr:     `accounts: an account already exists for this email`,
 				},
 			}
 			for _, c := range cases {

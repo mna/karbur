@@ -1,8 +1,9 @@
 CREATE TABLE "accounts_groups" (
   "id"       SERIAL NOT NULL,
-  "name"     TEXT NOT NULL CHECK (length("name") <= 128),
+  "name"     TEXT NOT NULL,
   "created"  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY ("id"),
-  UNIQUE ("name")
+  CONSTRAINT uidx_groups_name UNIQUE ("name"),
+  CONSTRAINT chk_name_length CHECK (length("name") <= 128)
 );

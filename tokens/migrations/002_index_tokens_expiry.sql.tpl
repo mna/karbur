@@ -1,1 +1,1 @@
-CREATE INDEX ON "tokens_tokens" ("expiry");
+CREATE INDEX idx_tokens_expiry ON "tokens_tokens" ("expiry");

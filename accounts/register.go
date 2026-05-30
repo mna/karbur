@@ -77,16 +77,19 @@ RETURNING
 	if err != nil {
 		switch pgdb.SQLState(err) {
 		case pgerrcode.UniqueViolation:
-			return id, errors.Tag(err, AccountsTag,
+			return id, errors.TagNew("an account already exists for this email", AccountsTag,
 				"code", "409", "parameter", "email", "actions", string(ActionRegister))
 
-		// TODO: improve this with a clearer message (name the constraint?)
 		case pgerrcode.CheckViolation:
-			// could technically be the password hash that is too long, but since we
-			// control the argon2 parameters, this should be caught before going to
-			// production, so we assume this is the email too long.
-			return id, errors.Tag(err, AccountsTag,
-				"code", "400", "parameter", "email", "actions", string(ActionRegister))
+			perr := pgdb.AsProtocolError(err)
+			switch perr.ConstraintName {
+			case "chk_email_length":
+				return id, errors.TagNew("email is too long", AccountsTag,
+					"code", "400", "parameter", "email", "actions", string(ActionRegister))
+			case "chk_password_length":
+				return id, errors.TagNew("password hash is too long", AccountsTag,
+					"code", "500", "parameter", "password", "actions", string(ActionRegister))
+			}
 		}
 	}
 	return id, err
