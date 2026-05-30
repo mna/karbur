@@ -46,6 +46,11 @@ func TestPool(t *testing.T) {
 				_, err := pool.Exec(ctx, "CREATE FOO bar")
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "42601")
+				require.Equal(t, "42601", pgdb.SQLState(err))
+				perr := pgdb.AsProtocolError(err)
+				require.NotNil(t, perr)
+				require.Equal(t, "42601", perr.Code)
+				require.Equal(t, "ERROR", perr.Severity)
 			})
 
 			t.Run("Pool", func(t *testing.T) {

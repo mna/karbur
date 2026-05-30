@@ -232,7 +232,7 @@ func (pe *ProtocolError) Error() string {
 // attempting to detect both the pgx error and the lib/pq error so that either
 // driver is supported. If it finds one, it returns the ProtocolError instance,
 // otherwise it returns nil.
-func AsProtocolError(err error) error {
+func AsProtocolError(err error) *ProtocolError {
 	if pxerr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return &ProtocolError{
 			Severity:         pxerr.Severity,
