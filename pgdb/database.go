@@ -13,9 +13,12 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"strings"
 
 	"codeberg.org/mna/karbur/errors"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lib/pq"
 )
 
 // Pool defines the methods required for a database pool.
@@ -196,4 +199,86 @@ func SQLState(err error) string {
 		return ssErr.SQLState()
 	}
 	return ""
+}
+
+// ProtocolError represents a postgres protocol error, see
+// https://www.postgresql.org/docs/current/protocol-error-fields.html.
+type ProtocolError struct {
+	Severity         string
+	Code             string
+	Message          string
+	Detail           string
+	Hint             string
+	Position         int32
+	InternalPosition int32
+	InternalQuery    string
+	Where            string
+	SchemaName       string
+	TableName        string
+	ColumnName       string
+	DataTypeName     string
+	ConstraintName   string
+	File             string
+	Line             int32
+	Routine          string
+	errmsg           string
+}
+
+func (pe *ProtocolError) Error() string {
+	return pe.errmsg
+}
+
+// AsProtocolError tries to find a postgres protocol error in the chain of err,
+// attempting to detect both the pgx error and the lib/pq error so that either
+// driver is supported. If it finds one, it returns the ProtocolError instance,
+// otherwise it returns nil.
+func AsProtocolError(err error) error {
+	if pxerr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		return &ProtocolError{
+			Severity:         pxerr.Severity,
+			Code:             pxerr.Code,
+			Message:          pxerr.Message,
+			Detail:           pxerr.Detail,
+			Hint:             pxerr.Hint,
+			Position:         pxerr.Position,
+			InternalPosition: pxerr.InternalPosition,
+			InternalQuery:    pxerr.InternalQuery,
+			Where:            pxerr.Where,
+			SchemaName:       pxerr.SchemaName,
+			TableName:        pxerr.TableName,
+			ColumnName:       pxerr.ColumnName,
+			DataTypeName:     pxerr.DataTypeName,
+			ConstraintName:   pxerr.ConstraintName,
+			File:             pxerr.File,
+			Line:             pxerr.Line,
+			Routine:          pxerr.Routine,
+			errmsg:           pxerr.Error(),
+		}
+	}
+	if pqerr, ok := errors.AsType[*pq.Error](err); ok {
+		pos, _ := strconv.Atoi(pqerr.Position)
+		ipos, _ := strconv.Atoi(pqerr.InternalPosition)
+		line, _ := strconv.Atoi(pqerr.Line)
+		return &ProtocolError{
+			Severity:         pqerr.Severity,
+			Code:             string(pqerr.Code),
+			Message:          pqerr.Message,
+			Detail:           pqerr.Detail,
+			Hint:             pqerr.Hint,
+			Position:         int32(pos),
+			InternalPosition: int32(ipos),
+			InternalQuery:    pqerr.InternalQuery,
+			Where:            pqerr.Where,
+			SchemaName:       pqerr.Schema,
+			TableName:        pqerr.Table,
+			ColumnName:       pqerr.Column,
+			DataTypeName:     pqerr.DataTypeName,
+			ConstraintName:   pqerr.Constraint,
+			File:             pqerr.File,
+			Line:             int32(line),
+			Routine:          pqerr.Routine,
+			errmsg:           pqerr.Error(),
+		}
+	}
+	return nil
 }
