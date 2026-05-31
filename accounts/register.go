@@ -81,14 +81,15 @@ RETURNING
 				"code", "409", "parameter", "email", "actions", string(ActionRegister))
 
 		case pgerrcode.CheckViolation:
-			perr := pgdb.AsProtocolError(err)
-			switch perr.ConstraintName {
-			case "chk_email_length":
-				return id, errors.TagNew("email is too long", AccountsTag,
-					"code", "400", "parameter", "email", "actions", string(ActionRegister))
-			case "chk_password_length":
-				return id, errors.TagNew("password hash is too long", AccountsTag,
-					"code", "500", "parameter", "password", "actions", string(ActionRegister))
+			if perr := pgdb.AsProtocolError(err); perr != nil {
+				switch perr.ConstraintName {
+				case "chk_email_length":
+					return id, errors.TagNew("email is too long", AccountsTag,
+						"code", "400", "parameter", "email", "actions", string(ActionRegister))
+				case "chk_password_length":
+					return id, errors.TagNew("password hash is too long", AccountsTag,
+						"code", "500", "parameter", "password", "actions", string(ActionRegister))
+				}
 			}
 		}
 	}

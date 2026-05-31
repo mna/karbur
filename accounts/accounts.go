@@ -5,10 +5,13 @@
 package accounts
 
 import (
+	"context"
+	"database/sql"
 	"embed"
 	"io/fs"
 	"net/http"
 	"strings"
+	"time"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
@@ -85,4 +88,33 @@ func validatePassword(pwd string, act Action) error {
 			"code", "400", "parameter", "password", "action", string(act))
 	}
 	return nil
+}
+
+type Account struct {
+	Email    string              `db:"email"`
+	Password string              `db:"password"`
+	Verified sql.Null[time.Time] `db:"verified"`
+	Created  time.Time           `db:"created"`
+}
+
+func (a *Accounts) ByEmail(ctx context.Context, email string) (*Account, error) {
+	const selectAccount = `
+SELECT
+	"email",
+	"password",
+	"verified",
+	"created"
+FROM
+	"accounts_accounts"
+WHERE
+	"email" = $1
+`
+	var acct Account
+	err := pgdb.EnsureQueryer(ctx, a.Conn, func(ctx context.Context, q pgdb.Queryer) error {
+		return q.QueryOne(ctx, &acct, selectAccount, email)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &acct, nil
 }

@@ -2,9 +2,11 @@ package accounts
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 
 	"codeberg.org/mna/karbur/errors"
+	"github.com/alexedwards/argon2id"
 )
 
 type loginInput struct {
@@ -37,10 +39,29 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			a.ErrorHandler(w, r, err)
 			return
 		}
+		// TODO: insert logged-in user in context, create session
 		h.ServeHTTP(w, r)
 	})
 }
 
 func (a *Accounts) login(ctx context.Context, email, password string) error {
-	panic("unimplemented")
+	acct, err := a.ByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// TODO: do a failing match with hard-coded hash
+			return errors.TagNew("invalid email or password", AccountsTag,
+				"code", "400", "parameter", "password", "action", string(ActionLogin))
+		}
+		return err
+	}
+
+	ok, err := argon2id.ComparePasswordAndHash(password, acct.Password)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.TagNew("invalid email or password", AccountsTag,
+			"code", "400", "parameter", "password", "action", string(ActionLogin))
+	}
+	return nil
 }
