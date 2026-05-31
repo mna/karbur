@@ -17,6 +17,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
 	"codeberg.org/mna/karbur/server/params"
+	"codeberg.org/mna/karbur/tokens"
 	"github.com/alexedwards/argon2id"
 )
 
@@ -36,6 +37,9 @@ type Accounts struct {
 	// need to be a dedicated connection, it just needs to satisfy the
 	// interface).
 	Conn pgdb.Connection
+
+	// Tokens is the tokens manager to use for secure, random tokens.
+	Tokens *tokens.Tokens
 
 	// ParamsDecoder is the params.Decoder to use to decode HTTP parameters.
 	ParamsDecoder *params.Decoder
@@ -91,6 +95,7 @@ func validatePassword(pwd string, act Action) error {
 }
 
 type Account struct {
+	ID       int64               `db:"id"`
 	Email    string              `db:"email"`
 	Password string              `db:"password"`
 	Verified sql.Null[time.Time] `db:"verified"`
@@ -100,6 +105,7 @@ type Account struct {
 func (a *Accounts) ByEmail(ctx context.Context, email string) (*Account, error) {
 	const selectAccount = `
 SELECT
+	"id",
 	"email",
 	"password",
 	"verified",

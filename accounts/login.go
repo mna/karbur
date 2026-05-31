@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/tokens"
 	"github.com/alexedwards/argon2id"
 )
 
@@ -35,37 +36,39 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			return
 		}
 
-		if err := a.login(r.Context(), input.Email, input.Password); err != nil {
+		acct, err := a.login(r.Context(), input.Email, input.Password)
+		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return
 		}
 		// TODO: insert logged-in user in context, create session
+		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: "session", RefID: acct.ID})
 		h.ServeHTTP(w, r)
 	})
 }
 
 const failPwdHash = "$argon2id$v=19$m=65536,t=1,p=8$u/bcVmH/87u/sZTTdq1Wdg$BWJfiHsq6IvDEF8PSPE+UnNxV7vdafKSQtIXVmdG4Ro"
 
-func (a *Accounts) login(ctx context.Context, email, password string) error {
+func (a *Accounts) login(ctx context.Context, email, password string) (*Account, error) {
 	acct, err := a.ByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// do a password-hash check that is ignored, to help prevent timing
 			// attacks when the account does not exist (see BenchmarkFailedLogin)
 			_, _ = argon2id.ComparePasswordAndHash(password, failPwdHash)
-			return errors.TagNew("invalid email or password", AccountsTag,
+			return nil, errors.TagNew("invalid email or password", AccountsTag,
 				"code", "400", "parameter", "password", "action", string(ActionLogin))
 		}
-		return err
+		return nil, err
 	}
 
 	ok, err := argon2id.ComparePasswordAndHash(password, acct.Password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return errors.TagNew("invalid email or password", AccountsTag,
+		return nil, errors.TagNew("invalid email or password", AccountsTag,
 			"code", "400", "parameter", "password", "action", string(ActionLogin))
 	}
-	return nil
+	return acct, nil
 }
