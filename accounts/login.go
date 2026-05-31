@@ -44,11 +44,15 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 	})
 }
 
+const failPwdHash = "$argon2id$v=19$m=65536,t=1,p=8$u/bcVmH/87u/sZTTdq1Wdg$BWJfiHsq6IvDEF8PSPE+UnNxV7vdafKSQtIXVmdG4Ro"
+
 func (a *Accounts) login(ctx context.Context, email, password string) error {
 	acct, err := a.ByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// TODO: do a failing match with hard-coded hash
+			// do a password-hash check that is ignored, to help prevent timing
+			// attacks when the account does not exist (see BenchmarkFailedLogin)
+			_, _ = argon2id.ComparePasswordAndHash(password, failPwdHash)
 			return errors.TagNew("invalid email or password", AccountsTag,
 				"code", "400", "parameter", "password", "action", string(ActionLogin))
 		}

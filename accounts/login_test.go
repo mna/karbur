@@ -2,11 +2,8 @@ package accounts
 
 import (
 	"bytes"
-	"context"
-	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"codeberg.org/mna/karbur/errors"
@@ -18,9 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var ctx = context.Background()
-
-func TestRegister(t *testing.T) {
+func TestLogin(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func() pgdb.Pool
@@ -59,6 +54,13 @@ func TestRegister(t *testing.T) {
 					wantErr:     "accounts: invalid email",
 				},
 				{
+					desc:        "email is missing",
+					contentType: "application/x-www-form-urlencoded",
+					body:        []byte(url.Values{"password": {"123"}}.Encode()),
+					wantCode:    http.StatusBadRequest,
+					wantErr:     "accounts: email is missing",
+				},
+				{
 					desc:        "missing password",
 					contentType: "application/json",
 					body:        []byte(`{"email":"a@b", "password":""}`),
@@ -66,39 +68,25 @@ func TestRegister(t *testing.T) {
 					wantErr:     "accounts: password is missing",
 				},
 				{
-					desc:        "non-matching passwords",
-					contentType: "application/json",
-					body:        []byte(`{"email":"a@b", "password":"123", "password2":"345"}`),
-					wantCode:    http.StatusBadRequest,
-					wantErr:     "accounts: passwords do not match",
-				},
-				{
 					desc:        "valid",
 					contentType: "application/x-www-form-urlencoded",
-					body:        []byte(url.Values{"email": {"a@c"}, "password": {"123"}, "password2": {"123"}}.Encode()),
+					body:        []byte(url.Values{"email": {"a@b"}, "password": {"123"}}.Encode()),
 					wantCode:    http.StatusNoContent,
 					wantErr:     "",
 				},
 				{
-					desc:        "invalid json",
+					desc:        "wrong password",
 					contentType: "application/json",
-					body:        []byte(`{"email":"a@b", "password":"123}`),
+					body:        []byte(`{"email":"a@b", "password":"456"}`),
 					wantCode:    http.StatusBadRequest,
-					wantErr:     "accounts: unexpected EOF",
+					wantErr:     "accounts: invalid email or password",
 				},
 				{
-					desc:        "email too long",
+					desc:        "unknown email",
 					contentType: "application/json",
-					body:        fmt.Appendf(nil, `{"email":"%s@b", "password":"123", "password2":"123"}`, strings.Repeat("a", 254)),
+					body:        []byte(`{"email":"b@c", "password":"456"}`),
 					wantCode:    http.StatusBadRequest,
-					wantErr:     `accounts: email is too long`,
-				},
-				{
-					desc:        "duplicate",
-					contentType: "application/x-www-form-urlencoded",
-					body:        []byte(url.Values{"email": {"a@b"}, "password": {"123"}, "password2": {"123"}}.Encode()),
-					wantCode:    http.StatusConflict,
-					wantErr:     `accounts: an account already exists for this email`,
+					wantErr:     "accounts: invalid email or password",
 				},
 			}
 			for _, c := range cases {
@@ -116,11 +104,64 @@ func TestRegister(t *testing.T) {
 						w.WriteHeader(code)
 					}
 
-					res, err := http.Post(srv.URL+"/register", c.contentType, bytes.NewReader(c.body))
+					res, err := http.Post(srv.URL+"/login", c.contentType, bytes.NewReader(c.body))
 					require.NoError(t, err)
 					require.Equal(t, c.wantCode, res.StatusCode)
 				})
 			}
+		})
+	}
+}
+
+func BenchmarkFailedLogin(b *testing.B) {
+	cases := []struct {
+		name  string
+		setup func() pgdb.Pool
+	}{
+		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(b, "", ""); return pgxadapt.ToPool(db) }},
+		{"sql", func() pgdb.Pool { db := testdb.NewSQL(b, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(b, "", ""); return sqladapt.ToPool(db) }},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			pool := tc.setup()
+			accts, srv := setupAccounts(b, pool)
+			accts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+				code := errors.Code(err)
+				if code == 0 {
+					code = http.StatusInternalServerError
+				}
+				w.WriteHeader(code)
+			}
+
+			// create a valid account for "a@b"
+			createAccount(b, srv.URL, "a@b", "123")
+
+			b.Run("known", func(b *testing.B) {
+				body := []byte(`{"email":"a@b", "password":"456"}`)
+				for b.Loop() {
+					res, err := http.Post(srv.URL+"/login", "application/json", bytes.NewReader(body))
+					if err != nil {
+						b.FailNow()
+					}
+					if res.StatusCode != 400 {
+						b.FailNow()
+					}
+				}
+			})
+
+			b.Run("unknown", func(b *testing.B) {
+				body := []byte(`{"email":"b@c", "password":"456"}`)
+				for b.Loop() {
+					res, err := http.Post(srv.URL+"/login", "application/json", bytes.NewReader(body))
+					if err != nil {
+						b.FailNow()
+					}
+					if res.StatusCode != 400 {
+						b.FailNow()
+					}
+				}
+			})
 		})
 	}
 }
