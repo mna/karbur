@@ -27,7 +27,7 @@ func TestLogin(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
-			accts, srv := setupAccounts(t, pool)
+			accts, srv := setupAccounts(t, pool, nil)
 
 			// create a valid account for "a@b"
 			createAccount(t, srv.URL, "a@b", "123")
@@ -170,7 +170,7 @@ func BenchmarkFailedLogin(b *testing.B) {
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {
 			pool := tc.setup()
-			accts, srv := setupAccounts(b, pool)
+			accts, srv := setupAccounts(b, pool, nil)
 			accts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 				code := errors.Code(err)
 				if code == 0 {

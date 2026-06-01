@@ -26,6 +26,9 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 	return mig.Register("karbur/accounts", nil, root, "karbur/tokens")
 }
 
+// Account represents a database account. If its email is verified, the
+// Verified field is not null (Verified.Valid is true), otherwise it is yet to
+// be verified.
 type Account struct {
 	ID       int64               `db:"id"`
 	Email    string              `db:"email"`

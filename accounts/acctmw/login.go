@@ -53,17 +53,13 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 		}
 
 		// create the session token and the cookie to store it
-		tokType := a.SessionTokenType
-		if tokType == "" {
-			tokType = defaultSessionTokenType
-		}
 		var maxAge int
 		dur := shortSessionDuration
 		if input.RememberMe {
 			dur = longSessionDuration
 			maxAge = int(dur / time.Second)
 		}
-		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: tokType, RefID: acct.ID, Expiry: dur})
+		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, Expiry: dur})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return

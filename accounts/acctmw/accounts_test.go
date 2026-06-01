@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupAccounts(tb testing.TB, pool pgdb.Pool) (*Accounts, *httptest.Server) {
+func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handler) (*Accounts, *httptest.Server) {
 	tb.Cleanup(func() {
 		err := pool.Close()
 		require.NoError(tb, err)
@@ -39,9 +39,24 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool) (*Accounts, *httptest.Server) 
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/register", accts.Register(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h := handlers[ActionRegister]; h != nil {
+			h.ServeHTTP(w, r)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})))
 	mux.Handle("/login", accts.Login(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h := handlers[ActionLogin]; h != nil {
+			h.ServeHTTP(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	mux.Handle("/load", accts.Login(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h := handlers[ActionLoad]; h != nil {
+			h.ServeHTTP(w, r)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})))
 	srv := httptest.NewServer(mux)

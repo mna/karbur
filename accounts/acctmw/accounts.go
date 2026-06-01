@@ -58,6 +58,13 @@ type Accounts struct {
 	SessionTokenType string
 }
 
+func (a *Accounts) sessionTokenType() string {
+	if a.SessionTokenType != "" {
+		return a.SessionTokenType
+	}
+	return defaultSessionTokenType
+}
+
 const (
 	AccountsTag = errors.ErrorTag("accounts")
 
@@ -71,6 +78,7 @@ type Action string
 const (
 	ActionRegister Action = "register"
 	ActionLogin    Action = "login"
+	ActionLoad     Action = "load"
 )
 
 func validateEmail(email string, act Action) error {

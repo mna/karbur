@@ -32,7 +32,7 @@ func TestRegister(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
-			accts, srv := setupAccounts(t, pool)
+			accts, srv := setupAccounts(t, pool, nil)
 
 			// create a valid account for "a@b"
 			createAccount(t, srv.URL, "a@b", "123")
