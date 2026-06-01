@@ -1,4 +1,4 @@
-package accounts
+package acctmw
 
 import (
 	"bytes"
@@ -33,11 +33,12 @@ func TestLogin(t *testing.T) {
 			createAccount(t, srv.URL, "a@b", "123")
 
 			cases := []struct {
-				desc        string
-				contentType string
-				body        []byte
-				wantCode    int
-				wantErr     string
+				desc          string
+				contentType   string
+				body          []byte
+				allowRemember bool
+				wantCode      int
+				wantErr       string
 			}{
 				{
 					desc:        "missing body",
@@ -88,9 +89,40 @@ func TestLogin(t *testing.T) {
 					wantCode:    http.StatusBadRequest,
 					wantErr:     "accounts: invalid email or password",
 				},
+				{
+					desc:        "unknown field",
+					contentType: "application/json",
+					body:        []byte(`{"email":"b@c", "password":"456", "what": true}`),
+					wantCode:    http.StatusBadRequest,
+					wantErr:     `accounts: json: unknown field "what"`,
+				},
+				{
+					desc:        "disallowed remember me",
+					contentType: "application/json",
+					body:        []byte(`{"email":"b@c", "password":"456", "remember_me": true}`),
+					wantCode:    http.StatusBadRequest,
+					wantErr:     `accounts: invalid parameter`,
+				},
+				{
+					desc:          "allowed remember me",
+					contentType:   "application/json",
+					allowRemember: true,
+					body:          []byte(`{"email":"a@b", "password":"123", "remember_me": true}`),
+					wantCode:      http.StatusNoContent,
+					wantErr:       ``,
+				},
+				{
+					desc:          "allowed remember me",
+					contentType:   "application/x-www-form-urlencoded",
+					allowRemember: true,
+					body:          []byte(url.Values{"email": {"a@b"}, "password": {"123"}, "remember_me": {"true"}}.Encode()),
+					wantCode:      http.StatusNoContent,
+					wantErr:       ``,
+				},
 			}
 			for _, c := range cases {
 				t.Run(c.desc, func(t *testing.T) {
+					accts.AllowRememberMe = c.allowRemember
 					accts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 						code := errors.Code(err)
 						if code == 0 {
@@ -107,6 +139,19 @@ func TestLogin(t *testing.T) {
 					res, err := http.Post(srv.URL+"/login", c.contentType, bytes.NewReader(c.body))
 					require.NoError(t, err)
 					require.Equal(t, c.wantCode, res.StatusCode)
+
+					if c.wantCode == http.StatusNoContent {
+						// the session cookie should be set
+						var found bool
+						for _, ck := range res.Cookies() {
+							if ck.Name == "__Host-ssn" {
+								require.NotEmpty(t, ck.Value)
+								found = true
+								break
+							}
+						}
+						require.True(t, found, "session cookie")
+					}
 				})
 			}
 		})

@@ -1,4 +1,4 @@
-package accounts
+package acctmw
 
 import (
 	"bytes"
@@ -99,6 +99,13 @@ func TestRegister(t *testing.T) {
 					body:        []byte(url.Values{"email": {"a@b"}, "password": {"123"}, "password2": {"123"}}.Encode()),
 					wantCode:    http.StatusConflict,
 					wantErr:     `accounts: an account already exists for this email`,
+				},
+				{
+					desc:        "unknown field",
+					contentType: "application/x-www-form-urlencoded",
+					body:        []byte(url.Values{"email": {"a@d"}, "password": {"123"}, "password2": {"123"}, "what": {"true"}}.Encode()),
+					wantCode:    http.StatusBadRequest,
+					wantErr:     `accounts: schema: invalid path "what"`,
 				},
 			}
 			for _, c := range cases {

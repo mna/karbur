@@ -1,4 +1,4 @@
-package accounts
+package acctmw
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"codeberg.org/mna/karbur/accounts"
+	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/tokens"
 	"github.com/alexedwards/argon2id"
@@ -50,7 +52,10 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			return
 		}
 
-		// TODO: insert logged-in user in context, create session
+		// store the logged-in account in the context for subsequent middleware
+		ctx := acctctx.WithAccount(r.Context(), acct)
+		r = r.WithContext(ctx)
+
 		tokType := a.SessionTokenType
 		if tokType == "" {
 			tokType = defaultSessionTokenType
@@ -63,6 +68,7 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			maxAge = int(dur / time.Second)
 		}
 
+		// create the session token and the cookie to store it
 		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: tokType, RefID: acct.ID, Expiry: dur})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
@@ -77,14 +83,15 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		})
+
 		h.ServeHTTP(w, r)
 	})
 }
 
 const failPwdHash = "$argon2id$v=19$m=65536,t=1,p=8$u/bcVmH/87u/sZTTdq1Wdg$BWJfiHsq6IvDEF8PSPE+UnNxV7vdafKSQtIXVmdG4Ro"
 
-func (a *Accounts) login(ctx context.Context, email, password string) (*Account, error) {
-	acct, err := a.ByEmail(ctx, email)
+func (a *Accounts) login(ctx context.Context, email, password string) (*accounts.Account, error) {
+	acct, err := accounts.ByEmail(ctx, a.Conn, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// do a password-hash check that is ignored, to help prevent timing

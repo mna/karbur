@@ -1,4 +1,4 @@
-package accounts
+package acctmw
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeberg.org/mna/karbur/accounts"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
 	"codeberg.org/mna/karbur/server/params"
@@ -25,7 +26,7 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool) (*Accounts, *httptest.Server) 
 	require.NoError(tb, err)
 	err = tokens.RegisterMigrations(mig)
 	require.NoError(tb, err)
-	err = RegisterMigrations(mig)
+	err = accounts.RegisterMigrations(mig)
 	require.NoError(tb, err)
 	err = mig.Migrate(ctx)
 	require.NoError(tb, err)
