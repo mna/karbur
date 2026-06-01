@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
@@ -27,7 +28,9 @@ func TestLogin(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
-			accts, srv := setupAccounts(t, pool, nil)
+
+			dh := &deferHandler{}
+			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionLogin: dh})
 
 			// create a valid account for "a@b"
 			createAccount(t, srv.URL, "a@b", "123")
@@ -72,7 +75,7 @@ func TestLogin(t *testing.T) {
 					desc:        "valid",
 					contentType: "application/x-www-form-urlencoded",
 					body:        []byte(url.Values{"email": {"a@b"}, "password": {"123"}}.Encode()),
-					wantCode:    http.StatusNoContent,
+					wantCode:    http.StatusOK,
 					wantErr:     "",
 				},
 				{
@@ -104,19 +107,19 @@ func TestLogin(t *testing.T) {
 					wantErr:     `accounts: invalid parameter`,
 				},
 				{
-					desc:          "allowed remember me",
+					desc:          "allowed remember me json",
 					contentType:   "application/json",
 					allowRemember: true,
 					body:          []byte(`{"email":"a@b", "password":"123", "remember_me": true}`),
-					wantCode:      http.StatusNoContent,
+					wantCode:      http.StatusOK,
 					wantErr:       ``,
 				},
 				{
-					desc:          "allowed remember me",
+					desc:          "allowed remember me form",
 					contentType:   "application/x-www-form-urlencoded",
 					allowRemember: true,
 					body:          []byte(url.Values{"email": {"a@b"}, "password": {"123"}, "remember_me": {"true"}}.Encode()),
-					wantCode:      http.StatusNoContent,
+					wantCode:      http.StatusOK,
 					wantErr:       ``,
 				},
 			}
@@ -136,11 +139,19 @@ func TestLogin(t *testing.T) {
 						w.WriteHeader(code)
 					}
 
+					dh.h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						acct := acctctx.Account(r.Context())
+						require.NotNil(t, acct, "Account in context")
+						ssnID := acctctx.SessionID(r.Context())
+						require.NotEmpty(t, ssnID, "Session ID in context")
+						w.WriteHeader(http.StatusOK)
+					})
+
 					res, err := http.Post(srv.URL+"/login", c.contentType, bytes.NewReader(c.body))
 					require.NoError(t, err)
 					require.Equal(t, c.wantCode, res.StatusCode)
 
-					if c.wantCode == http.StatusNoContent {
+					if c.wantCode == http.StatusOK {
 						// the session cookie should be set
 						var found bool
 						for _, ck := range res.Cookies() {

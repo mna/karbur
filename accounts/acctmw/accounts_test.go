@@ -15,6 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type deferHandler struct {
+	h http.Handler
+}
+
+func (d *deferHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	d.h.ServeHTTP(w, r)
+}
+
 func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handler) (*Accounts, *httptest.Server) {
 	tb.Cleanup(func() {
 		err := pool.Close()
