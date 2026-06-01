@@ -52,28 +52,29 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			return
 		}
 
-		// store the logged-in account in the context for subsequent middleware
-		ctx := acctctx.WithAccount(r.Context(), acct)
-		r = r.WithContext(ctx)
-
+		// create the session token and the cookie to store it
 		tokType := a.SessionTokenType
 		if tokType == "" {
 			tokType = defaultSessionTokenType
 		}
-
 		var maxAge int
 		dur := shortSessionDuration
 		if input.RememberMe {
 			dur = longSessionDuration
 			maxAge = int(dur / time.Second)
 		}
-
-		// create the session token and the cookie to store it
 		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: tokType, RefID: acct.ID, Expiry: dur})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return
 		}
+
+		// store the logged-in account and session ID in the context for subsequent
+		// middleware
+		ctx := acctctx.WithAccount(r.Context(), acct)
+		ctx = acctctx.WithSessionID(ctx, ssnTok)
+		r = r.WithContext(ctx)
+
 		http.SetCookie(w, &http.Cookie{
 			Name:     "__Host-ssn",
 			Value:    ssnTok,
