@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"time"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/tokens"
@@ -11,8 +12,9 @@ import (
 )
 
 type loginInput struct {
-	Email    string `schema:"email" json:"email"`
-	Password string `schema:"password" json:"password"`
+	Email      string `schema:"email" json:"email"`
+	Password   string `schema:"password" json:"password"`
+	RememberMe bool   `schema:"remember_me" json:"remember_me"`
 }
 
 func (i *loginInput) Validate() error {
@@ -35,14 +37,46 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			a.ErrorHandler(w, r, err)
 			return
 		}
+		if input.RememberMe && !a.AllowRememberMe {
+			err := errors.TagNew("invalid parameter", AccountsTag,
+				"code", "400", "parameter", "remember_me", "action", string(ActionLogin))
+			a.ErrorHandler(w, r, err)
+			return
+		}
 
 		acct, err := a.login(r.Context(), input.Email, input.Password)
 		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return
 		}
+
 		// TODO: insert logged-in user in context, create session
-		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: "session", RefID: acct.ID})
+		tokType := a.SessionTokenType
+		if tokType == "" {
+			tokType = defaultSessionTokenType
+		}
+
+		var maxAge int
+		dur := shortSessionDuration
+		if input.RememberMe {
+			dur = longSessionDuration
+			maxAge = int(dur / time.Second)
+		}
+
+		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: tokType, RefID: acct.ID, Expiry: dur})
+		if err != nil {
+			a.ErrorHandler(w, r, err)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "__Host-ssn",
+			Value:    ssnTok,
+			Path:     "/",
+			MaxAge:   maxAge,
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 		h.ServeHTTP(w, r)
 	})
 }

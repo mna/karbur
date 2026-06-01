@@ -44,6 +44,12 @@ type Accounts struct {
 	// ParamsDecoder is the params.Decoder to use to decode HTTP parameters.
 	ParamsDecoder *params.Decoder
 
+	// AllowRememberMe indicates if the "remember_me" field is supported in the
+	// login flow. If so, and if "remember_me" is true on login, the session is
+	// persistent and valid for 30 days, otherwise the session expires in 12
+	// hours and the cookie does not persist.
+	AllowRememberMe bool
+
 	// ErrorHandler is called to render the response in case of an error in one
 	// of the Accounts middleware handlers.
 	//
@@ -62,9 +68,19 @@ type Accounts struct {
 	// Argon2Params are the argon2 parameters to use to hash passwords for
 	// storage and verification. If nil, argon2id.DefaultParams are used.
 	Argon2Params *argon2id.Params
+
+	// SessionTokenType is the token type used for the session token. Defaults to
+	// "session" if empty.
+	SessionTokenType string
 }
 
-const AccountsTag = errors.ErrorTag("accounts")
+const (
+	AccountsTag = errors.ErrorTag("accounts")
+
+	defaultSessionTokenType = "session"
+	shortSessionDuration    = 12 * time.Hour
+	longSessionDuration     = 30 * 24 * time.Hour
+)
 
 type Action string
 
@@ -118,6 +134,29 @@ WHERE
 	var acct Account
 	err := pgdb.EnsureQueryer(ctx, a.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		return q.QueryOne(ctx, &acct, selectAccount, email)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &acct, nil
+}
+
+func (a *Accounts) ByID(ctx context.Context, id int64) (*Account, error) {
+	const selectAccount = `
+SELECT
+	"id",
+	"email",
+	"password",
+	"verified",
+	"created"
+FROM
+	"accounts_accounts"
+WHERE
+	"id" = $1
+`
+	var acct Account
+	err := pgdb.EnsureQueryer(ctx, a.Conn, func(ctx context.Context, q pgdb.Queryer) error {
+		return q.QueryOne(ctx, &acct, selectAccount, id)
 	})
 	if err != nil {
 		return nil, err

@@ -30,9 +30,11 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool) (*Accounts, *httptest.Server) 
 	err = mig.Migrate(ctx)
 	require.NoError(tb, err)
 
+	toks := &tokens.Tokens{Conn: pool}
 	accts := &Accounts{
 		Conn:          pool,
 		ParamsDecoder: params.New(),
+		Tokens:        toks,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/register", accts.Register(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

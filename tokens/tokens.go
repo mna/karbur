@@ -60,6 +60,8 @@ type TokenArgs struct {
 	Expiry time.Duration
 }
 
+// TODO: support an idle expiry (for non-single-use), reset whenever the token is looked up
+
 // New generates a new random, secure token configured according to args. It
 // uses the existing DB transaction if there is one. The token is
 // base64-url-encoded so it is safe to use in URLs and cookies if needed.
