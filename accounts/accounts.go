@@ -82,3 +82,17 @@ WHERE
 	}
 	return &acct, nil
 }
+
+func Delete(ctx context.Context, q pgdb.Queryer, id int64) error {
+	const deleteAccount = `
+DELETE
+FROM
+	"accounts_accounts"
+WHERE
+	"id" = $1
+`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, deleteAccount, id)
+		return err
+	})
+}
