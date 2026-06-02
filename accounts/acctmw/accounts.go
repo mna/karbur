@@ -79,6 +79,7 @@ const (
 	ActionRegister Action = "register"
 	ActionLogin    Action = "login"
 	ActionLoad     Action = "load"
+	ActionLogout   Action = "logout"
 )
 
 func validateEmail(email string, act Action) error {
