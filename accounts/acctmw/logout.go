@@ -1,8 +1,11 @@
 package acctmw
 
 import (
+	"context"
 	"net/http"
+	"time"
 
+	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
 )
 
@@ -19,40 +22,39 @@ func (a *Accounts) Logout(h http.Handler) http.Handler {
 			return
 		}
 
-		if err := a.logout(r.Context()); err != nil {
-			a.ErrorHandler(w, r, err)
-			return
+		if ssnID := acctctx.SessionID(r.Context()); ssnID != "" {
+			if err := a.logout(r.Context(), ssnID); err != nil {
+				a.ErrorHandler(w, r, err)
+				return
+			}
+
+			// clear the logged-in account and session id from the context for
+			// subsequent handlers
+			ctx := acctctx.WithAccount(r.Context(), nil)
+			ctx = acctctx.WithSessionID(ctx, "")
+			r = r.WithContext(ctx)
 		}
 
-		// // create the session token and the cookie to store it
-		// var maxAge int
-		// dur := shortSessionDuration
-		// if input.RememberMe {
-		// 	dur = longSessionDuration
-		// 	maxAge = int(dur / time.Second)
-		// }
-		// ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, Expiry: dur})
-		// if err != nil {
-		// 	a.ErrorHandler(w, r, err)
-		// 	return
-		// }
-		//
-		// // store the logged-in account and session ID in the context for subsequent
-		// // middleware
-		// ctx := acctctx.WithAccount(r.Context(), acct)
-		// ctx = acctctx.WithSessionID(ctx, ssnTok)
-		// r = r.WithContext(ctx)
-		//
-		// http.SetCookie(w, &http.Cookie{
-		// 	Name:     "__Host-ssn",
-		// 	Value:    ssnTok,
-		// 	Path:     "/",
-		// 	MaxAge:   maxAge,
-		// 	Secure:   true,
-		// 	HttpOnly: true,
-		// 	SameSite: http.SameSiteLaxMode,
-		// })
+		// clear the session cookie unconditionally, as it may still be there even
+		// if there was no session id in the context (e.g. unknown session or
+		// corresponding account not found)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "__Host-ssn",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (a *Accounts) logout(ctx context.Context, ssnID string) error {
+	// at the database level, the only action is to delete the token via the
+	// Tokens manager.
+	return a.Tokens.Delete(ctx, ssnID)
 }
