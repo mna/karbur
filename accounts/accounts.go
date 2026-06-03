@@ -8,12 +8,20 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"io/fs"
+	"net/http"
 	"time"
 
+	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
+	"github.com/jackc/pgerrcode"
 )
+
+// AccountsTag is the error tag used to tag validation errors in this package.
+// Untagged errors are typically internal server errors in HTTP vocabulary.
+const AccountsTag = errors.ErrorTag("accounts")
 
 //go:embed migrations
 var migrations embed.FS
@@ -41,6 +49,8 @@ type Account struct {
 // account, test those DB-based functions directly. Eventually, SetPassword,
 // VerifyEmail, SetEmail.
 
+// ByEmail returns the account corresponding to the email. If none exist, the
+// error is sql.ErrNoRows (check with errors.Is).
 func ByEmail(ctx context.Context, q pgdb.Queryer, email string) (*Account, error) {
 	const selectAccount = `
 SELECT
@@ -64,6 +74,8 @@ WHERE
 	return &acct, nil
 }
 
+// ByID returns the account corresponding to the primary key identifier. If
+// none exist, the error is sql.ErrNoRows (check with errors.Is).
 func ByID(ctx context.Context, q pgdb.Queryer, id int64) (*Account, error) {
 	const selectAccount = `
 SELECT
@@ -87,6 +99,57 @@ WHERE
 	return &acct, nil
 }
 
+func Create(ctx context.Context, q pgdb.Queryer, email, hashedPwd string) (*Account, error) {
+	const insertAccount = `
+INSERT INTO
+  "accounts_accounts" (
+    "email",
+    "password"
+  )
+VALUES
+  ($1, $2)
+RETURNING
+  "id"
+`
+	var acct *Account
+	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		var id int64
+		err := q.QueryOne(ctx, &id, insertAccount, email, hashedPwd)
+		if err != nil {
+			return err
+		}
+
+		acct, err = ByID(ctx, q, id)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		switch pgdb.SQLState(err) {
+		case pgerrcode.UniqueViolation:
+			return nil, errors.TagNew("an account already exists for this email", AccountsTag,
+				"code", fmt.Sprint(http.StatusConflict), "parameter", "email")
+
+		case pgerrcode.CheckViolation:
+			if perr := pgdb.AsProtocolError(err); perr != nil {
+				switch perr.ConstraintName {
+				case "chk_email_length":
+					return nil, errors.TagNew("email is too long", AccountsTag,
+						"code", fmt.Sprint(http.StatusBadRequest), "parameter", "email")
+				case "chk_password_length":
+					// this is treated as a server error as it is caused by the hashing algorithm
+					return nil, errors.TagNew("password hash is too long", AccountsTag,
+						"code", fmt.Sprint(http.StatusInternalServerError), "parameter", "password")
+				}
+			}
+		}
+	}
+
+	return acct, err
+}
+
+// Delete deletes the account identified by the primary key id.
 func Delete(ctx context.Context, q pgdb.Queryer, id int64) error {
 	const deleteAccount = `
 DELETE

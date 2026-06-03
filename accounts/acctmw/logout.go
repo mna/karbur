@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"codeberg.org/mna/karbur/accounts"
 	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
 )
@@ -15,8 +16,8 @@ func (a *Accounts) Logout(h http.Handler) http.Handler {
 		// arguments provided.
 		var input struct{}
 		if err := a.ParamsDecoder.Decode(r, &input); err != nil {
-			if !errors.IsTag(err, AccountsTag) {
-				err = errors.Tag(err, AccountsTag, "code", "400", "action", string(ActionLogout))
+			if !errors.IsTag(err, accounts.AccountsTag) {
+				err = errors.Tag(err, accounts.AccountsTag, "code", "400", "action", string(ActionLogout))
 			}
 			a.ErrorHandler(w, r, err)
 			return

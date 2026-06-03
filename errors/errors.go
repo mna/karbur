@@ -86,7 +86,7 @@ type taggedError struct {
 	meta map[string]string
 }
 
-func (e taggedError) Error() string {
+func (e *taggedError) Error() string {
 	var buf strings.Builder
 
 	if len(e.meta) > 0 {
@@ -101,10 +101,13 @@ func (e taggedError) Error() string {
 		}
 		buf.WriteByte(']')
 	}
+	if e.tag == "" {
+		return e.err.Error() + buf.String()
+	}
 	return string(e.tag) + ": " + e.err.Error() + buf.String()
 }
 
-func (e taggedError) Unwrap() error {
+func (e *taggedError) Unwrap() error {
 	return e.err
 }
 
@@ -147,7 +150,7 @@ func Tag(e error, tag ErrorTag, kvpairs ...string) error {
 			m[k] = v
 		}
 	}
-	return taggedError{tag: tag, err: e, meta: m}
+	return &taggedError{tag: tag, err: e, meta: m}
 }
 
 // CodeKey is the key used to store an error code in the error metadata.
@@ -158,8 +161,7 @@ const CodeKey = "code"
 // IsTag returns true if e or any error in its chain is tagged with the
 // provided tag.
 func IsTag(e error, tag ErrorTag) bool {
-	var te taggedError
-	if As(e, &te) {
+	if te, ok := AsType[*taggedError](e); ok {
 		if te.tag == tag {
 			return true
 		}
@@ -171,8 +173,7 @@ func IsTag(e error, tag ErrorTag) bool {
 // HasKey returns true if e or any error in its chain has been tagged with the
 // specified key, regardless of its value.
 func HasKey(e error, key string) bool {
-	var te taggedError
-	if As(e, &te) {
+	if te, ok := AsType[*taggedError](e); ok {
 		if _, ok := te.meta[key]; ok {
 			return true
 		}
@@ -185,8 +186,7 @@ func HasKey(e error, key string) bool {
 // the chain has been tagged with it. If no such error exists, it returns an
 // empty string.
 func KeyValue(e error, key string) string {
-	var te taggedError
-	if As(e, &te) {
+	if te, ok := AsType[*taggedError](e); ok {
 		if v, ok := te.meta[key]; ok {
 			return v
 		}
@@ -195,8 +195,31 @@ func KeyValue(e error, key string) string {
 	return ""
 }
 
-// Code returns the integer value of the "code" key in the error metadata, if
-// it is present and its value is a valid integer. Otherwise it returns 0.
+// WithKeyValue adds (or sets) the specified key-value pair to the first tagged
+// error found in e's chain. If e is not and does not wrap any tagged error,
+// and it is not nil, it is wrapped with one with an empty tag and the
+// key-value pair is set on it. It returns e or the new tagged error that wraps
+// e.
+func WithKeyValue(e error, key, value string) error {
+	if e == nil {
+		return e
+	}
+
+	if te, ok := AsType[*taggedError](e); ok {
+		if te.meta == nil {
+			te.meta = make(map[string]string)
+		}
+		te.meta[key] = value
+		return e
+	}
+
+	// no tagged error in the chain, tag e
+	return Tag(e, "", key, value)
+}
+
+// Code returns the integer value of the first "code" key found in the error
+// metadata, if it is present and its value is a valid integer. Otherwise it
+// returns 0.
 func Code(e error) int {
 	v := KeyValue(e, CodeKey)
 	if n, err := strconv.Atoi(v); err == nil {

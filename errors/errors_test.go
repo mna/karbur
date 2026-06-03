@@ -136,3 +136,29 @@ func TestCode(t *testing.T) {
 		})
 	}
 }
+
+func TestWithKeyValue(t *testing.T) {
+	cases := []struct {
+		desc      string
+		err       error
+		wantValue string
+	}{
+		{"nil", nil, ""},
+		{"not tagged", constErr, "v"},
+		{"tagged no meta", Tag(constErr, testTag), "v"},
+		{"tagged other key", Tag(constErr, testTag, "x", "y"), "v"},
+		{"tagged same key", Tag(constErr, testTag, "k", "w"), "v"},
+		{"wrapped", Errorf("wrap: %w", Tag(constErr, testTag, "x", "y")), "v"},
+		{"multi wrap", Errorf("wrap2: %w", Errorf("wrap: %w", Tag(constErr, testTag, "k", "w"))), "v"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := WithKeyValue(tc.err, "k", "v")
+			require.Equal(t, tc.wantValue, KeyValue(got, "k"))
+			if got != nil {
+				t.Log(got.Error())
+			}
+		})
+	}
+}

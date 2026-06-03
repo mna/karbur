@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/mna/karbur/accounts"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/server/params"
@@ -65,9 +66,15 @@ func (a *Accounts) sessionTokenType() string {
 	return defaultSessionTokenType
 }
 
-const (
-	AccountsTag = errors.ErrorTag("accounts")
+func (a *Accounts) argon2Params() *argon2id.Params {
+	params := a.Argon2Params
+	if params == nil {
+		params = argon2id.DefaultParams
+	}
+	return params
+}
 
+const (
 	defaultSessionTokenType = "session"
 	shortSessionDuration    = 12 * time.Hour
 	longSessionDuration     = 30 * 24 * time.Hour
@@ -86,10 +93,10 @@ func validateEmail(email string, act Action) error {
 	before, after, _ := strings.Cut(email, "@")
 	if before == "" || after == "" {
 		if email == "" {
-			return errors.TagNew("email is missing", AccountsTag,
+			return errors.TagNew("email is missing", accounts.AccountsTag,
 				"code", "400", "parameter", "email", "action", string(act))
 		}
-		return errors.TagNew("invalid email", AccountsTag,
+		return errors.TagNew("invalid email", accounts.AccountsTag,
 			"code", "400", "parameter", "email", "action", string(act))
 	}
 	return nil
@@ -97,7 +104,7 @@ func validateEmail(email string, act Action) error {
 
 func validatePassword(pwd string, act Action) error {
 	if pwd == "" {
-		return errors.TagNew("password is missing", AccountsTag,
+		return errors.TagNew("password is missing", accounts.AccountsTag,
 			"code", "400", "parameter", "password", "action", string(act))
 	}
 	return nil

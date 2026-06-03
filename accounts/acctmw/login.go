@@ -33,14 +33,14 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var input loginInput
 		if err := a.ParamsDecoder.Decode(r, &input); err != nil {
-			if !errors.IsTag(err, AccountsTag) {
-				err = errors.Tag(err, AccountsTag, "code", "400", "action", string(ActionLogin))
+			if !errors.IsTag(err, accounts.AccountsTag) {
+				err = errors.Tag(err, accounts.AccountsTag, "code", "400", "action", string(ActionLogin))
 			}
 			a.ErrorHandler(w, r, err)
 			return
 		}
 		if input.RememberMe && !a.AllowRememberMe {
-			err := errors.TagNew("invalid parameter", AccountsTag,
+			err := errors.TagNew("invalid parameter", accounts.AccountsTag,
 				"code", "400", "parameter", "remember_me", "action", string(ActionLogin))
 			a.ErrorHandler(w, r, err)
 			return
@@ -94,7 +94,7 @@ func (a *Accounts) login(ctx context.Context, email, password string) (*accounts
 			// do a password-hash check that is ignored, to help prevent timing
 			// attacks when the account does not exist (see BenchmarkFailedLogin)
 			_, _ = argon2id.ComparePasswordAndHash(password, failPwdHash)
-			return nil, errors.TagNew("invalid email or password", AccountsTag,
+			return nil, errors.TagNew("invalid email or password", accounts.AccountsTag,
 				"code", "400", "parameter", "password", "action", string(ActionLogin))
 		}
 		return nil, err
@@ -105,7 +105,7 @@ func (a *Accounts) login(ctx context.Context, email, password string) (*accounts
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.TagNew("invalid email or password", AccountsTag,
+		return nil, errors.TagNew("invalid email or password", accounts.AccountsTag,
 			"code", "400", "parameter", "password", "action", string(ActionLogin))
 	}
 	return acct, nil
