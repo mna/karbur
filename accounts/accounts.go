@@ -167,6 +167,40 @@ WHERE
 	})
 }
 
+// CreateGroups ensures the specified groups are created if they do not already
+// exist.
+func CreateGroups(ctx context.Context, q pgdb.Queryer, groups []string) error {
+	const insertGroups = `
+INSERT INTO
+	"accounts_groups" (
+		"name"
+	)
+SELECT * FROM UNNEST($1::text[])
+ON CONFLICT ON CONSTRAINT uidx_groups_name DO NOTHING
+`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, insertGroups, groups)
+		return err
+	})
+}
+
+// Groups returns the list of existing group names.
+func Groups(ctx context.Context, q pgdb.Queryer) ([]string, error) {
+	const selectGroups = `
+SELECT
+	"name"
+FROM
+	"accounts_groups"
+ORDER BY
+	"name"
+`
+	var groups []string
+	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		return q.QueryMany(ctx, &groups, selectGroups)
+	})
+	return groups, err
+}
+
 // SetGroups sets the account's group membership to exactly the provided
 // groups. Note that non-existing groups are silently ignored.
 func SetGroups(ctx context.Context, btx pgdb.BeginTxer, acctID int64, groups []string) error {
