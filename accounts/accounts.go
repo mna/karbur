@@ -167,14 +167,90 @@ WHERE
 	})
 }
 
-func SetGroups(ctx context.Context, tx pgdb.BeginTxer, acctID int64, groups []string) error {
-	const removeMembers = `
-
+// SetGroups sets the account's group membership to exactly the provided
+// groups. Note that non-existing groups are silently ignored.
+func SetGroups(ctx context.Context, btx pgdb.BeginTxer, acctID int64, groups []string) error {
+	const (
+		removeMembers = `
+DELETE
+FROM
+	"accounts_members" m
+USING
+	"accounts_groups" g
+WHERE
+	m.group_id = g.id AND
+	g.account_id = $1 AND
+	g.name != ALL($2)
 `
+
+		insertMembers = `
+INSERT INTO
+	"accounts_members" (
+		account_id,
+		group_id
+	)
+SELECT
+	$1,
+	g.id
+FROM
+	"accounts_groups" g
+WHERE
+	g.name = ANY($2)
+ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
+`
+	)
+
+	return pgdb.EnsureTx(ctx, btx, func(ctx context.Context, tx pgdb.Txer) error {
+		if _, err := tx.Exec(ctx, removeMembers, acctID, groups); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, insertMembers, acctID, groups); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
+// AddGroup adds the specified group to the membership of the account, if
+// necessary. Note that non-existing groups are silently ignored.
 func AddGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+	const insertMember = `
+INSERT INTO
+	"accounts_members" (
+		account_id,
+		group_id
+	)
+SELECT
+	$1,
+	g.id
+FROM
+	"accounts_groups" g
+WHERE
+	g.name = $2
+ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
+`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, insertMember, acctID, group)
+		return err
+	})
 }
 
+// RemoveGroup removes the specified group from the membership of the account,
+// if necessary. Note that non-existing groups are silently ignored.
 func RemoveGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+	const removeMember = `
+DELETE
+FROM
+	"accounts_members" m
+USING
+	"accounts_groups" g
+WHERE
+	m.group_id = g.id AND
+	g.account_id = $1 AND
+	g.name = $2
+`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, removeMember, acctID, group)
+		return err
+	})
 }
