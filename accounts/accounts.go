@@ -43,27 +43,40 @@ type Account struct {
 	Password string              `db:"password"`
 	Verified sql.Null[time.Time] `db:"verified"`
 	Created  time.Time           `db:"created"`
+	Groups   []string            `db:"groups"`
 }
 
-// TODO: SetGroups, AddGroup, RemoveGroup, return groups when returning
-// account, test those DB-based functions directly. Eventually, SetPassword,
-// VerifyEmail, SetEmail.
+// TODO: return groups when returning account, test those DB-based functions
+// directly. Eventually, SetPassword, VerifyEmail, SetEmail.
+
+const (
+	selectAccountPrefix = `
+SELECT
+	a."id",
+	a."email",
+	a."password",
+	a."verified",
+	a."created",
+	array_agg(g.name) FILTER (WHERE g.name IS NOT NULL) as "groups"
+FROM
+	"accounts_accounts" a
+	LEFT JOIN "accounts_members" m ON a.id = m.account_id
+	LEFT JOIN "accounts_groups" g ON m.group_id = g.id
+WHERE
+`
+	selectAccountSuffix = `
+GROUP BY
+	a."id"
+`
+)
 
 // ByEmail returns the account corresponding to the email. If none exist, the
 // error is sql.ErrNoRows (check with errors.Is).
 func ByEmail(ctx context.Context, q pgdb.Queryer, email string) (*Account, error) {
-	const selectAccount = `
-SELECT
-	"id",
-	"email",
-	"password",
-	"verified",
-	"created"
-FROM
-	"accounts_accounts"
-WHERE
-	"email" = $1
-`
+	const selectAccount = selectAccountPrefix + `
+	a."email" = $1
+` + selectAccountSuffix
+
 	var acct Account
 	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
 		return q.QueryOne(ctx, &acct, selectAccount, email)
@@ -77,18 +90,10 @@ WHERE
 // ByID returns the account corresponding to the primary key identifier. If
 // none exist, the error is sql.ErrNoRows (check with errors.Is).
 func ByID(ctx context.Context, q pgdb.Queryer, id int64) (*Account, error) {
-	const selectAccount = `
-SELECT
-	"id",
-	"email",
-	"password",
-	"verified",
-	"created"
-FROM
-	"accounts_accounts"
-WHERE
-	"id" = $1
-`
+	const selectAccount = selectAccountPrefix + `
+	a."id" = $1
+` + selectAccountSuffix
+
 	var acct Account
 	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
 		return q.QueryOne(ctx, &acct, selectAccount, id)
@@ -213,7 +218,7 @@ USING
 	"accounts_groups" g
 WHERE
 	m.group_id = g.id AND
-	g.account_id = $1 AND
+	m.account_id = $1 AND
 	g.name != ALL($2)
 `
 

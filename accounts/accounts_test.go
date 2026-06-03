@@ -73,7 +73,7 @@ func TestAccounts(t *testing.T) {
 			require.ErrorIs(t, err, sql.ErrNoRows)
 			require.Nil(t, got)
 
-			// list groups when there are non
+			// list groups when there are none
 			groups, err := Groups(ctx, pool)
 			require.NoError(t, err)
 			require.Empty(t, groups)
@@ -97,6 +97,44 @@ func TestAccounts(t *testing.T) {
 			groups, err = Groups(ctx, pool)
 			require.NoError(t, err)
 			require.Equal(t, []string{"a", "b", "c", "d"}, groups)
+
+			// set no group for an account
+			err = SetGroups(ctx, pool, acct.ID, nil)
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Empty(t, got.Groups)
+
+			// set a valid and an unknown group
+			err = SetGroups(ctx, pool, acct.ID, []string{"a", "Z"})
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a"}, got.Groups)
+
+			// add some groups
+			err = SetGroups(ctx, pool, acct.ID, []string{"a", "b", "c"})
+			require.NoError(t, err)
+
+			// no-op same list
+			err = SetGroups(ctx, pool, acct.ID, []string{"a", "b", "c"})
+			require.NoError(t, err)
+
+			// remove some and add some
+			err = SetGroups(ctx, pool, acct.ID, []string{"b", "c", "d"})
+			require.NoError(t, err)
+
+			// remove only, with unkown
+			err = SetGroups(ctx, pool, acct.ID, []string{"c", "d", "Z"})
+			require.NoError(t, err)
+
+			// remove all
+			err = SetGroups(ctx, pool, acct.ID, []string{})
+			require.NoError(t, err)
+
+			// set on another account
+			err = SetGroups(ctx, pool, acct2.ID, []string{"a"})
+			require.NoError(t, err)
 		})
 	}
 }
