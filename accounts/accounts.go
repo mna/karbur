@@ -45,7 +45,7 @@ type Account struct {
 	Created  time.Time           `db:"created"`
 }
 
-// TODO: Create, SetGroups, AddGroup, RemoveGroup, return groups when returning
+// TODO: SetGroups, AddGroup, RemoveGroup, return groups when returning
 // account, test those DB-based functions directly. Eventually, SetPassword,
 // VerifyEmail, SetEmail.
 
@@ -99,6 +99,9 @@ WHERE
 	return &acct, nil
 }
 
+// Create creates a new account with the provided email and hashed password. It
+// returns a properly-tagged error if database validations fail (such as
+// account already existing or email or password length error).
 func Create(ctx context.Context, q pgdb.Queryer, email, hashedPwd string) (*Account, error) {
 	const insertAccount = `
 INSERT INTO
@@ -162,4 +165,16 @@ WHERE
 		_, err := q.Exec(ctx, deleteAccount, id)
 		return err
 	})
+}
+
+func SetGroups(ctx context.Context, tx pgdb.BeginTxer, acctID int64, groups []string) error {
+	const removeMembers = `
+
+`
+}
+
+func AddGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+}
+
+func RemoveGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
 }
