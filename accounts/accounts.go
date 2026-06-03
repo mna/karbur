@@ -37,6 +37,10 @@ type Account struct {
 	Created  time.Time           `db:"created"`
 }
 
+// TODO: Create, SetGroups, AddGroup, RemoveGroup, return groups when returning
+// account, test those DB-based functions directly. Eventually, SetPassword,
+// VerifyEmail, SetEmail.
+
 func ByEmail(ctx context.Context, q pgdb.Queryer, email string) (*Account, error) {
 	const selectAccount = `
 SELECT
