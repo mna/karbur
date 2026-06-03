@@ -48,28 +48,24 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 		ParamsDecoder: params.New(),
 		Tokens:        toks,
 	}
+
+	routes := map[Action]func(http.Handler) http.Handler{
+		ActionRegister: accts.Register,
+		ActionLogin:    accts.Login,
+		ActionLoad:     accts.Load,
+		ActionLogout:   accts.Logout,
+	}
+
 	mux := http.NewServeMux()
-	mux.Handle("/register", accts.Register(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h := handlers[ActionRegister]; h != nil {
-			h.ServeHTTP(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})))
-	mux.Handle("/login", accts.Login(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h := handlers[ActionLogin]; h != nil {
-			h.ServeHTTP(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})))
-	mux.Handle("/load", accts.Load(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h := handlers[ActionLoad]; h != nil {
-			h.ServeHTTP(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})))
+	for act, mw := range routes {
+		mux.Handle("/"+string(act), mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if h := handlers[act]; h != nil {
+				h.ServeHTTP(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})))
+	}
 	srv := httptest.NewServer(mux)
 	tb.Cleanup(func() { srv.Close() })
 
