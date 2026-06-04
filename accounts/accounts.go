@@ -285,7 +285,7 @@ USING
 	"accounts_groups" g
 WHERE
 	m.group_id = g.id AND
-	g.account_id = $1 AND
+	m.account_id = $1 AND
 	g.name = $2
 `
 	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {

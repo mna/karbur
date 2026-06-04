@@ -104,6 +104,10 @@ func TestAccounts(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, got.Groups)
 
+			// set some groups for the other account, should be unchanged after the tests
+			err = SetGroups(ctx, pool, acct2.ID, []string{"a", "d"})
+			require.NoError(t, err)
+
 			// set a valid and an unknown group
 			err = SetGroups(ctx, pool, acct.ID, []string{"a", "Z"})
 			require.NoError(t, err)
@@ -114,26 +118,84 @@ func TestAccounts(t *testing.T) {
 			// add some groups
 			err = SetGroups(ctx, pool, acct.ID, []string{"a", "b", "c"})
 			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "c"}, got.Groups)
 
 			// no-op same list
 			err = SetGroups(ctx, pool, acct.ID, []string{"a", "b", "c"})
 			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "c"}, got.Groups)
 
 			// remove some and add some
 			err = SetGroups(ctx, pool, acct.ID, []string{"b", "c", "d"})
 			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"b", "c", "d"}, got.Groups)
 
 			// remove only, with unkown
 			err = SetGroups(ctx, pool, acct.ID, []string{"c", "d", "Z"})
 			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"c", "d"}, got.Groups)
 
 			// remove all
 			err = SetGroups(ctx, pool, acct.ID, []string{})
 			require.NoError(t, err)
-
-			// set on another account
-			err = SetGroups(ctx, pool, acct2.ID, []string{"a"})
+			got, err = ByID(ctx, pool, acct.ID)
 			require.NoError(t, err)
+			require.Empty(t, got.Groups)
+
+			// check the other account
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "d"}, got.Groups)
+
+			// add an already-existing group
+			err = AddGroup(ctx, pool, acct2.ID, "a")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "d"}, got.Groups)
+
+			// add a new group
+			err = AddGroup(ctx, pool, acct2.ID, "b")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "d"}, got.Groups)
+
+			// add a non-existing group
+			err = AddGroup(ctx, pool, acct2.ID, "Z")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "d"}, got.Groups)
+
+			// remove a non-existing group
+			err = RemoveGroup(ctx, pool, acct2.ID, "Z")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "d"}, got.Groups)
+
+			// remove a group already not applied
+			err = RemoveGroup(ctx, pool, acct2.ID, "c")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "b", "d"}, got.Groups)
+
+			// remove a group that needs to be removed
+			err = RemoveGroup(ctx, pool, acct2.ID, "b")
+			require.NoError(t, err)
+			got, err = ByID(ctx, pool, acct2.ID)
+			require.NoError(t, err)
+			require.Equal(t, []string{"a", "d"}, got.Groups)
 		})
 	}
 }
