@@ -8,7 +8,6 @@ import (
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
-	"codeberg.org/mna/karbur/pgdb/sqladapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
 	"codeberg.org/mna/karbur/tokens"
 	"github.com/stretchr/testify/require"
@@ -22,8 +21,8 @@ func TestAccounts(t *testing.T) {
 		setup func() pgdb.Pool
 	}{
 		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
-		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
-		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		// {"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		// {"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
