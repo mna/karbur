@@ -83,10 +83,11 @@ const (
 type Action string
 
 const (
-	ActionRegister Action = "register"
-	ActionLogin    Action = "login"
-	ActionLoad     Action = "load"
-	ActionLogout   Action = "logout"
+	ActionRegister  Action = "register"
+	ActionLogin     Action = "login"
+	ActionLoad      Action = "load"
+	ActionLogout    Action = "logout"
+	ActionAuthorize Action = "authorize"
 )
 
 func validateEmail(email string, act Action) error {

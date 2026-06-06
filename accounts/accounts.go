@@ -46,8 +46,7 @@ type Account struct {
 	Groups   []string            `db:"groups"`
 }
 
-// TODO: return groups when returning account, test those DB-based functions
-// directly. Eventually, SetPassword, VerifyEmail, SetEmail.
+// TODO: Eventually, SetPassword, VerifyEmail, SetEmail.
 
 const (
 	selectAccountPrefix = `

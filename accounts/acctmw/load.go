@@ -24,13 +24,13 @@ func (a *Accounts) Load(h http.Handler) http.Handler {
 			}
 
 			if tok != nil {
+				// if account does not exist, do as if no session cookie was present
 				acct, err := accounts.ByID(r.Context(), a.Conn, tok.RefID)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					a.ErrorHandler(w, r, err)
 					return
 				}
 
-				// if account does not exist, do as if no session cookie was present
 				if acct != nil {
 					ctx := acctctx.WithAccount(r.Context(), acct)
 					ctx = acctctx.WithSessionID(ctx, tok.Token)
