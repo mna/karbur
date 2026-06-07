@@ -182,8 +182,35 @@ INSERT INTO
 SELECT * FROM UNNEST($1::text[])
 ON CONFLICT ON CONSTRAINT uidx_groups_name DO NOTHING
 `
-	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, insertGroups, groups)
+		return err
+	})
+
+	switch pgdb.SQLState(err) {
+	case pgerrcode.CheckViolation:
+		if perr := pgdb.AsProtocolError(err); perr != nil {
+			switch perr.ConstraintName {
+			case "chk_name_length":
+				return errors.TagNew("group name is too short or too long", AccountsTag,
+					"code", fmt.Sprint(http.StatusBadRequest), "parameter", "group")
+			}
+		}
+	}
+	return err
+}
+
+// DeleteGroups deletes the specified groups. Non-existing groups are ignored.
+func DeleteGroups(ctx context.Context, q pgdb.Queryer, groups []string) error {
+	const deleteGroups = `
+DELETE
+FROM
+	"accounts_groups"
+WHERE
+	"name" = ANY($1)
+`
+	return pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, deleteGroups, groups)
 		return err
 	})
 }
@@ -205,9 +232,9 @@ ORDER BY
 	return groups, err
 }
 
-// SetGroups sets the account's group membership to exactly the provided
+// SetMembership sets the account's group membership to exactly the provided
 // groups. Note that non-existing groups are silently ignored.
-func SetGroups(ctx context.Context, btx pgdb.BeginTxer, acctID int64, groups []string) error {
+func SetMembership(ctx context.Context, btx pgdb.BeginTxer, acctID int64, groups []string) error {
 	const (
 		removeMembers = `
 DELETE
@@ -249,9 +276,9 @@ ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
 	})
 }
 
-// AddGroup adds the specified group to the membership of the account, if
+// AddMembership adds the specified group to the membership of the account, if
 // necessary. Note that non-existing groups are silently ignored.
-func AddGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+func AddMembership(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
 	const insertMember = `
 INSERT INTO
 	"accounts_members" (
@@ -273,9 +300,9 @@ ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
 	})
 }
 
-// RemoveGroup removes the specified group from the membership of the account,
-// if necessary. Note that non-existing groups are silently ignored.
-func RemoveGroup(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+// RemoveMembership removes the specified group from the membership of the
+// account, if necessary. Note that non-existing groups are silently ignored.
+func RemoveMembership(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
 	const removeMember = `
 DELETE
 FROM

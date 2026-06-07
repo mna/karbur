@@ -5,5 +5,5 @@ CREATE TABLE "accounts_groups" (
 
   PRIMARY KEY ("id"),
   CONSTRAINT uidx_groups_name UNIQUE ("name"),
-  CONSTRAINT chk_name_length CHECK (length("name") <= 128)
+  CONSTRAINT chk_name_length CHECK (length("name") >= 2 AND length("name") <= 128)
 );
