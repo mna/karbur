@@ -9,7 +9,6 @@ import (
 	"codeberg.org/mna/karbur/errors"
 )
 
-// TODO: group creation must prevent creating those
 const (
 	accessAnyone        = "?"
 	accessAuthenticated = "*"
