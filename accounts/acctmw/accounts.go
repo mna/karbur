@@ -88,6 +88,7 @@ const (
 	ActionLoad      Action = "load"
 	ActionLogout    Action = "logout"
 	ActionAuthorize Action = "authorize"
+	ActionDeny      Action = "deny"
 )
 
 func validateEmail(email string, act Action) error {

@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	accessAnyone        = "?"
-	accessAuthenticated = "*"
-	accessVerified      = "@"
+	AccessAnyone        = "?"
+	AccessAuthenticated = "*"
+	AccessVerified      = "@"
 )
 
 // Authorize is a middleware that allows access to h if the request's account
@@ -40,12 +40,16 @@ func (a *Accounts) authorize(groups []string, isDeny bool) func(h http.Handler) 
 	for _, g := range groups {
 		set[g] = true
 	}
+	action := ActionAuthorize
+	if isDeny {
+		action = ActionDeny
+	}
 
 	return func(h http.Handler) http.Handler {
 		isInGroup := func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) }
 		isNotInGroup := func(w http.ResponseWriter, r *http.Request) {
 			err := errors.TagNew("permission denied", accounts.AccountsTag,
-				"code", fmt.Sprint(http.StatusForbidden), "action", string(ActionAuthorize))
+				"code", fmt.Sprint(http.StatusForbidden), "action", string(action))
 			a.ErrorHandler(w, r, err)
 		}
 		if isDeny {
@@ -57,18 +61,18 @@ func (a *Accounts) authorize(groups []string, isDeny bool) func(h http.Handler) 
 		}
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if set[accessAnyone] {
+			if set[AccessAnyone] {
 				isInGroup(w, r)
 				return
 			}
 
 			acct := acctctx.Account(r.Context())
 			if acct != nil {
-				if set[accessAuthenticated] {
+				if set[AccessAuthenticated] {
 					isInGroup(w, r)
 					return
 				}
-				if acct.Verified.Valid && set[accessVerified] {
+				if acct.Verified.Valid && set[AccessVerified] {
 					isInGroup(w, r)
 					return
 				}
