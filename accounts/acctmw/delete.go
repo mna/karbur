@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"codeberg.org/mna/karbur/accounts"
 	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
+	"codeberg.org/mna/karbur/pgdb"
 	"github.com/alexedwards/argon2id"
 )
 
@@ -41,15 +43,31 @@ func (a *Accounts) Delete(h http.Handler) http.Handler {
 			a.ErrorHandler(w, r, err)
 			return
 		}
-		if err := a.delete(r.Context(), input.Password, acct.Password); err != nil {
+		if err := a.delete(r.Context(), acct.ID, input.Password, acct.Password); err != nil {
 			a.ErrorHandler(w, r, err)
 			return
 		}
-		// TODO: delete account, delete session tokens and any pending reset/verify tokens, clear session cookie
+
+		// clear the session cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "__Host-ssn",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		// NOTE: we deliberately do not clear the context's account, in case the
+		// subsequent handlers need to do something with it (e.g. clear additional
+		// account-related data).
+		h.ServeHTTP(w, r)
 	})
 }
 
-func (a *Accounts) delete(ctx context.Context, password, passwordHash string) error {
+func (a *Accounts) delete(ctx context.Context, acctID int64, password, passwordHash string) error {
 	ok, err := argon2id.ComparePasswordAndHash(password, passwordHash)
 	if err != nil {
 		return err
@@ -58,5 +76,14 @@ func (a *Accounts) delete(ctx context.Context, password, passwordHash string) er
 		return errors.TagNew("invalid password", accounts.AccountsTag,
 			"code", "400", "parameter", "password", "action", string(ActionDelete))
 	}
-	return nil
+
+	return pgdb.EnsureTx(ctx, a.Conn, func(ctx context.Context, tx pgdb.Txer) error {
+		if err := accounts.Delete(ctx, a.Conn, acctID); err != nil {
+			return err
+		}
+		if err := a.Tokens.DeleteByTypeRef(ctx, a.sessionTokenType(), acctID); err != nil {
+			return err
+		}
+		return nil
+	})
 }
