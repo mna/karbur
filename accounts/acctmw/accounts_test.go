@@ -54,6 +54,11 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 		ActionLogin:    accts.Login,
 		ActionLoad:     accts.Load,
 		ActionLogout:   accts.Logout,
+		// Authorize and Deny endpoints wrap the handler in Load and don't actually
+		// apply any authorization checks by default, the caller should provide it
+		// in the handler.
+		ActionAuthorize: accts.Load,
+		ActionDeny:      accts.Load,
 	}
 
 	mux := http.NewServeMux()
