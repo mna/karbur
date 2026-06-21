@@ -1,6 +1,6 @@
 // Package tokens implements a random, secure and time-limited token generator
 // that helps implement common features like session IDs (multi-use,
-// long-lived), password resets and verify email (both single-use, short-lived)
+// long-lived), password resets and verify email (single-use, short-lived)
 // scenarios.
 package tokens
 
@@ -55,9 +55,14 @@ type TokenArgs struct {
 	// invalid after first use, a single valid one exists for the Type and RefID)
 	// or not.
 	SingleUse bool
-	// Expiry is the duration that the token is valid. It is precise to the
-	// second.
-	Expiry time.Duration
+	// AbsoluteExpiry is the duration that the token is valid. It is precise to
+	// the second.
+	AbsoluteExpiry time.Duration
+	// IdleExpiry is the duration that the token is valid in between calls to
+	// Verify (or between New and Verify). The idle time is reset each time a
+	// token is successfully verified. It is ignored if SingleUse is true. It is
+	// precise to the second.
+	IdleExpiry time.Duration
 }
 
 // TODO: support an idle expiry (for non-single-use), reset whenever the token is looked up
@@ -84,17 +89,23 @@ INSERT INTO
     "type",
     "single_use",
     "ref_id",
-    "expiry"
+    "expiry",
+    "idle"
   )
 VALUES
-  ($1, $2, $3, $4, now() + $5 * interval '1 second')
+  ($1, $2, $3, $4, now() + $5 * interval '1 second', now() + $6 * interval '1 second')
 ON CONFLICT ("type", "ref_id") WHERE "single_use" DO
 UPDATE SET
   "token" = EXCLUDED."token",
   "expiry" = EXCLUDED."expiry"
 `
+	var idleSecs sql.Null[int64]
+	if !args.SingleUse && args.IdleExpiry > 0 {
+		idleSecs.V = int64(args.IdleExpiry / time.Second)
+	}
 	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
-		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID, int64(args.Expiry/time.Second))
+		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID,
+			int64(args.AbsoluteExpiry/time.Second), idleSecs)
 		return err
 	})
 	if err != nil {
@@ -105,11 +116,12 @@ UPDATE SET
 
 // Token represents a token loaded via Verify.
 type Token struct {
-	Token     string    `db:"token"`
-	Type      string    `db:"type"`
-	SingleUse bool      `db:"single_use"`
-	RefID     int64     `db:"ref_id"`
-	Expiry    time.Time `db:"expiry"`
+	Token     string              `db:"token"`
+	Type      string              `db:"type"`
+	SingleUse bool                `db:"single_use"`
+	RefID     int64               `db:"ref_id"`
+	Expiry    time.Time           `db:"expiry"`
+	Idle      sql.Null[time.Time] `db:"idle"`
 }
 
 // ErrInvalid is the error returned if an invalid (expired or unknown) token is
@@ -138,12 +150,14 @@ SELECT
   "type",
   "single_use",
   "ref_id",
-  "expiry"
+  "expiry",
+  "idle"
 FROM
   "tokens_tokens"
 WHERE
   "token" = $1 AND
-  "expiry" > now()
+  "expiry" > now() AND
+  ( "idle" IS NULL OR "idle" > now() )
 `
 	var tok Token
 	err := pgdb.EnsureTx(ctx, t.Conn, func(ctx context.Context, tx pgdb.Txer) error {
@@ -159,6 +173,8 @@ WHERE
 			if err := t.Delete(ctx, token); err != nil {
 				return err
 			}
+		} else if tok.Idle.Valid {
+			// TODO: reset the idle expiration
 		}
 		return nil
 	})

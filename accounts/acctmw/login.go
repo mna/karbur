@@ -59,7 +59,7 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			dur = longSessionDuration
 			maxAge = int(dur / time.Second)
 		}
-		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, Expiry: dur})
+		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: dur})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return

@@ -44,20 +44,20 @@ func TestPool(t *testing.T) {
 
 			// create a token without a type
 			_, err = tt.New(ctx, TokenArgs{
-				Type:      "",
-				RefID:     1,
-				SingleUse: true,
-				Expiry:    time.Second,
+				Type:           "",
+				RefID:          1,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Second,
 			})
 			require.Error(t, err)
 			require.ErrorContains(t, err, "SQLSTATE 23514") // violates check constraint
 
 			// create a single-use token
 			tok1, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     1,
-				SingleUse: true,
-				Expiry:    time.Minute,
+				Type:           "test",
+				RefID:          1,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Minute,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok1)
@@ -75,20 +75,20 @@ func TestPool(t *testing.T) {
 
 			// create another single-use token
 			tok2a, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     2,
-				SingleUse: true,
-				Expiry:    time.Minute,
+				Type:           "test",
+				RefID:          2,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Minute,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok2a)
 
 			// generate another for the same type/ref, will replace it
 			tok2b, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     2,
-				SingleUse: true,
-				Expiry:    time.Minute,
+				Type:           "test",
+				RefID:          2,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Minute,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok2b)
@@ -104,10 +104,10 @@ func TestPool(t *testing.T) {
 
 			// generate a multi-use token
 			tok3, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     3,
-				SingleUse: false,
-				Expiry:    time.Minute,
+				Type:           "test",
+				RefID:          3,
+				SingleUse:      false,
+				AbsoluteExpiry: time.Minute,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok3)
@@ -129,10 +129,10 @@ func TestPool(t *testing.T) {
 
 			// can create another multi-use for the same type/ref
 			tok4, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     3,
-				SingleUse: false,
-				Expiry:    time.Minute,
+				Type:           "test",
+				RefID:          3,
+				SingleUse:      false,
+				AbsoluteExpiry: time.Minute,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok4)
@@ -148,10 +148,10 @@ func TestPool(t *testing.T) {
 
 			// create a short-lived multi-use
 			tok5, err := tt.New(ctx, TokenArgs{
-				Type:      "test",
-				RefID:     5,
-				SingleUse: false,
-				Expiry:    time.Second,
+				Type:           "test",
+				RefID:          5,
+				SingleUse:      false,
+				AbsoluteExpiry: time.Second,
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok5)

@@ -4,6 +4,7 @@ CREATE TABLE "tokens_tokens" (
 	"single_use" BOOLEAN NOT NULL,
 	"ref_id"     BIGINT NOT NULL,
 	"expiry"     TIMESTAMPTZ NOT NULL,
+	"idle"       TIMESTAMPTZ NULL,
 	"created"    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
 	PRIMARY KEY ("token"),
