@@ -47,6 +47,7 @@ type Account struct {
 }
 
 // TODO: Eventually, SetPassword, VerifyEmail, SetEmail.
+// TODO: change all DB IDs to use uuidv7
 
 const (
 	selectAccountPrefix = `

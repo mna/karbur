@@ -183,6 +183,8 @@ func TestPool(t *testing.T) {
 			err = pool.QueryOne(ctx, &countLast, `SELECT COUNT(*) FROM tokens_tokens;`)
 			require.NoError(t, err)
 			require.Equal(t, countAfter, countLast)
+
+			// TODO: test idle expiration, ensure it cannot be set on a single-use
 		})
 	}
 }

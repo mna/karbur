@@ -65,8 +65,6 @@ type TokenArgs struct {
 	IdleExpiry time.Duration
 }
 
-// TODO: support an idle expiry (for non-single-use), reset whenever the token is looked up
-
 // New generates a new random, secure token configured according to args. It
 // uses the existing DB transaction if there is one. The token is
 // base64-url-encoded so it is safe to use in URLs and cookies if needed.
@@ -90,10 +88,12 @@ INSERT INTO
     "single_use",
     "ref_id",
     "expiry",
-    "idle"
+    "idle",
+    "idle_duration"
   )
 VALUES
-  ($1, $2, $3, $4, now() + $5 * interval '1 second', now() + $6 * interval '1 second')
+  ($1, $2, $3, $4, now() + $5 * interval '1 second',
+  	now() + $6 * interval '1 second', $6)
 ON CONFLICT ("type", "ref_id") WHERE "single_use" DO
 UPDATE SET
   "token" = EXCLUDED."token",
@@ -174,7 +174,9 @@ WHERE
 				return err
 			}
 		} else if tok.Idle.Valid {
-			// TODO: reset the idle expiration
+			if err := t.ResetIdle(ctx, token); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -241,6 +243,26 @@ WHERE
 `
 	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, deleteTokens, tokenRefID, tokenType)
+		return err
+	})
+}
+
+// ResetIdle resets the idle expiry of the specified token, regardless of its
+// current validity. If no initial idle expiration was set or if the token is
+// single-use, it is a no-op. It uses the existing DB transaction if there is
+// one.
+func (t *Tokens) ResetIdle(ctx context.Context, token string) error {
+	const updateToken = `
+UPDATE
+  "tokens_tokens"
+SET
+	"idle" = now() + "idle_duration" * interval '1 second'
+WHERE
+  "token" = $1 AND
+  "single_use" IS FALSE
+`
+	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, updateToken, token)
 		return err
 	})
 }
