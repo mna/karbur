@@ -1,5 +1,5 @@
 CREATE TABLE "accounts_accounts" (
-  "id"       SERIAL NOT NULL,
+  "id"       UUID DEFAULT uuidv7(),
   -- see https://stackoverflow.com/a/574698/1094941
   "email"    TEXT NOT NULL,
   "password" TEXT NOT NULL,

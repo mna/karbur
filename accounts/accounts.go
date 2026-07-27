@@ -16,6 +16,7 @@ import (
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 )
 
@@ -38,7 +39,7 @@ func RegisterMigrations(mig *migrate.Migrator) error {
 // Verified field is not null (Verified.Valid is true), otherwise it is yet to
 // be verified.
 type Account struct {
-	ID       int64               `db:"id"`
+	ID       uuid.UUID           `db:"id"`
 	Email    string              `db:"email"`
 	Password string              `db:"password"`
 	Verified sql.Null[time.Time] `db:"verified"`
@@ -47,7 +48,6 @@ type Account struct {
 }
 
 // TODO: Eventually, SetPassword, VerifyEmail, SetEmail.
-// TODO: change all DB IDs to use uuidv7
 
 const (
 	selectAccountPrefix = `
@@ -89,7 +89,7 @@ func ByEmail(ctx context.Context, q pgdb.Queryer, email string) (*Account, error
 
 // ByID returns the account corresponding to the primary key identifier. If
 // none exist, the error is sql.ErrNoRows (check with errors.Is).
-func ByID(ctx context.Context, q pgdb.Queryer, id int64) (*Account, error) {
+func ByID(ctx context.Context, q pgdb.Queryer, id uuid.UUID) (*Account, error) {
 	const selectAccount = selectAccountPrefix + `
 	a."id" = $1
 ` + selectAccountSuffix
@@ -121,7 +121,7 @@ RETURNING
 `
 	var acct *Account
 	err := pgdb.EnsureQueryer(ctx, q, func(ctx context.Context, q pgdb.Queryer) error {
-		var id int64
+		var id uuid.UUID
 		err := q.QueryOne(ctx, &id, insertAccount, email, hashedPwd)
 		if err != nil {
 			return err
@@ -158,7 +158,7 @@ RETURNING
 }
 
 // Delete deletes the account identified by the primary key id.
-func Delete(ctx context.Context, q pgdb.Queryer, id int64) error {
+func Delete(ctx context.Context, q pgdb.Queryer, id uuid.UUID) error {
 	const deleteAccount = `
 DELETE
 FROM
@@ -235,7 +235,7 @@ ORDER BY
 
 // SetMembership sets the account's group membership to exactly the provided
 // groups. Note that non-existing groups are silently ignored.
-func SetMembership(ctx context.Context, btx pgdb.BeginTxer, acctID int64, groups []string) error {
+func SetMembership(ctx context.Context, btx pgdb.BeginTxer, acctID uuid.UUID, groups []string) error {
 	const (
 		removeMembers = `
 DELETE
@@ -279,7 +279,7 @@ ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
 
 // AddMembership adds the specified group to the membership of the account, if
 // necessary. Note that non-existing groups are silently ignored.
-func AddMembership(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+func AddMembership(ctx context.Context, q pgdb.Queryer, acctID uuid.UUID, group string) error {
 	const insertMember = `
 INSERT INTO
 	"accounts_members" (
@@ -303,7 +303,7 @@ ON CONFLICT ON CONSTRAINT uidx_members_account_id_group_id DO NOTHING
 
 // RemoveMembership removes the specified group from the membership of the
 // account, if necessary. Note that non-existing groups are silently ignored.
-func RemoveMembership(ctx context.Context, q pgdb.Queryer, acctID int64, group string) error {
+func RemoveMembership(ctx context.Context, q pgdb.Queryer, acctID uuid.UUID, group string) error {
 	const removeMember = `
 DELETE
 FROM

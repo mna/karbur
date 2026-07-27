@@ -16,6 +16,7 @@ import (
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/migrate"
+	"github.com/google/uuid"
 )
 
 //go:embed migrations
@@ -50,7 +51,7 @@ type TokenArgs struct {
 	// Type is an application-defined type of token.
 	Type string
 	// RefID is an application-defined identifier linked to this token.
-	RefID int64
+	RefID uuid.UUID
 	// SingleUse indicates if the token is unique and single-use (consumed and
 	// invalid after first use, a single valid one exists for the Type and RefID)
 	// or not.
@@ -120,7 +121,7 @@ type Token struct {
 	Token     string              `db:"token"`
 	Type      string              `db:"type"`
 	SingleUse bool                `db:"single_use"`
-	RefID     int64               `db:"ref_id"`
+	RefID     uuid.UUID           `db:"ref_id"`
 	Expiry    time.Time           `db:"expiry"`
 	Idle      sql.Null[time.Time] `db:"idle"`
 }
@@ -206,7 +207,7 @@ func MustMatchType(t string) func(*Token) error {
 
 // MustMatchTypeAndRefID returns a token validation function that fails if the
 // type of the loaded token is not t or if its ref_id is not refID.
-func MustMatchTypeAndRefID(t string, refID int64) func(*Token) error {
+func MustMatchTypeAndRefID(t string, refID uuid.UUID) func(*Token) error {
 	return func(tok *Token) error {
 		if tok.Type != t || tok.RefID != refID {
 			return ErrInvalid
@@ -234,7 +235,7 @@ WHERE
 // tokenRefID. This is meant for scenarios like when all session IDs should be
 // invalidated for a given user, or canceling a password reset operation. It
 // uses the existing DB transaction if there is one.
-func (t *Tokens) DeleteByTypeRef(ctx context.Context, tokenType string, tokenRefID int64) error {
+func (t *Tokens) DeleteByTypeRef(ctx context.Context, tokenType string, tokenRefID uuid.UUID) error {
 	const deleteTokens = `
 DELETE FROM
   "tokens_tokens"

@@ -1,5 +1,5 @@
 CREATE TABLE "accounts_groups" (
-  "id"       SERIAL NOT NULL,
+  "id"       UUID DEFAULT uuidv7(),
   "name"     TEXT NOT NULL,
   "created"  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

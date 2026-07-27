@@ -11,6 +11,7 @@ import (
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"github.com/alexedwards/argon2id"
+	"github.com/google/uuid"
 )
 
 type deleteInput struct {
@@ -67,7 +68,7 @@ func (a *Accounts) Delete(h http.Handler) http.Handler {
 	})
 }
 
-func (a *Accounts) delete(ctx context.Context, acctID int64, password, passwordHash string) error {
+func (a *Accounts) delete(ctx context.Context, acctID uuid.UUID, password, passwordHash string) error {
 	ok, err := argon2id.ComparePasswordAndHash(password, passwordHash)
 	if err != nil {
 		return err

@@ -10,6 +10,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
 	"codeberg.org/mna/karbur/pgdb/sqladapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,7 +46,7 @@ func TestPool(t *testing.T) {
 			// create a token without a type
 			_, err = tt.New(ctx, TokenArgs{
 				Type:           "",
-				RefID:          1,
+				RefID:          uuid.New(),
 				SingleUse:      true,
 				AbsoluteExpiry: time.Second,
 			})
@@ -53,9 +54,10 @@ func TestPool(t *testing.T) {
 			require.ErrorContains(t, err, "SQLSTATE 23514") // violates check constraint
 
 			// create a single-use token
+			tok1RefID := uuid.New()
 			tok1, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          1,
+				RefID:          tok1RefID,
 				SingleUse:      true,
 				AbsoluteExpiry: time.Minute,
 			})
@@ -63,20 +65,21 @@ func TestPool(t *testing.T) {
 			require.NotEmpty(t, tok1)
 
 			// verify the token
-			dbtok, err := tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", 1))
+			dbtok, err := tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", tok1RefID))
 			require.NoError(t, err)
 			require.Equal(t, tok1, dbtok.Token)
 			require.WithinDuration(t, time.Now().Add(time.Minute), dbtok.Expiry, 2*time.Second)
 
 			// verify the token again, now invalid
-			_, err = tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", 1))
+			_, err = tt.Verify(ctx, tok1, MustMatchTypeAndRefID("test", tok1RefID))
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrInvalid)
 
 			// create another single-use token
+			tok2RefID := uuid.New()
 			tok2a, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          2,
+				RefID:          tok2RefID,
 				SingleUse:      true,
 				AbsoluteExpiry: time.Minute,
 			})
@@ -86,7 +89,7 @@ func TestPool(t *testing.T) {
 			// generate another for the same type/ref, will replace it
 			tok2b, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          2,
+				RefID:          tok2RefID,
 				SingleUse:      true,
 				AbsoluteExpiry: time.Minute,
 			})
@@ -103,9 +106,10 @@ func TestPool(t *testing.T) {
 			require.NoError(t, err)
 
 			// generate a multi-use token
+			tok3RefID := uuid.New()
 			tok3, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          3,
+				RefID:          tok3RefID,
 				SingleUse:      false,
 				AbsoluteExpiry: time.Minute,
 			})
@@ -116,7 +120,7 @@ func TestPool(t *testing.T) {
 			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
 			require.Equal(t, tok3, dbtok.Token)
-			require.EqualValues(t, 3, dbtok.RefID)
+			require.EqualValues(t, tok3RefID, dbtok.RefID)
 
 			// verify it with a non-matching type, invalid
 			_, err = tt.Verify(ctx, tok3, MustMatchType("NO-SUCH-TYPE"))
@@ -125,12 +129,12 @@ func TestPool(t *testing.T) {
 			// verify it again, still valid
 			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
-			require.EqualValues(t, 3, dbtok.RefID)
+			require.EqualValues(t, tok3RefID, dbtok.RefID)
 
 			// can create another multi-use for the same type/ref
 			tok4, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          3,
+				RefID:          tok3RefID,
 				SingleUse:      false,
 				AbsoluteExpiry: time.Minute,
 			})
@@ -141,15 +145,15 @@ func TestPool(t *testing.T) {
 			// both are still valid
 			dbtok, err = tt.Verify(ctx, tok3, MustMatchType("test"))
 			require.NoError(t, err)
-			require.EqualValues(t, 3, dbtok.RefID)
+			require.EqualValues(t, tok3RefID, dbtok.RefID)
 			dbtok, err = tt.Verify(ctx, tok4, MustMatchType("test"))
 			require.NoError(t, err)
-			require.EqualValues(t, 3, dbtok.RefID)
+			require.EqualValues(t, tok3RefID, dbtok.RefID)
 
 			// create a short-lived multi-use
 			tok5, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          5,
+				RefID:          uuid.New(),
 				SingleUse:      false,
 				AbsoluteExpiry: time.Second,
 			})
@@ -187,7 +191,7 @@ func TestPool(t *testing.T) {
 			// create a single-use token with an idle expiration, it is ignored
 			tok6, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          6,
+				RefID:          uuid.New(),
 				SingleUse:      true,
 				AbsoluteExpiry: time.Minute,
 				IdleExpiry:     time.Second,
@@ -206,7 +210,7 @@ func TestPool(t *testing.T) {
 			// create another single-use token with an ignored idle expiration
 			tok7, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          7,
+				RefID:          uuid.New(),
 				SingleUse:      true,
 				AbsoluteExpiry: time.Minute,
 				IdleExpiry:     time.Second,
@@ -225,7 +229,7 @@ func TestPool(t *testing.T) {
 			// create a multi-use token with an idle expiry
 			tok8, err := tt.New(ctx, TokenArgs{
 				Type:           "test",
-				RefID:          8,
+				RefID:          uuid.New(),
 				SingleUse:      false,
 				AbsoluteExpiry: time.Minute,
 				IdleExpiry:     time.Second,

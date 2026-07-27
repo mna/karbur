@@ -10,6 +10,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
 	"codeberg.org/mna/karbur/tokens"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +43,7 @@ func TestAccounts(t *testing.T) {
 			require.ErrorIs(t, err, sql.ErrNoRows)
 			require.Nil(t, acct)
 
-			acct, err = ByID(ctx, pool, 9999)
+			acct, err = ByID(ctx, pool, uuid.New())
 			require.ErrorIs(t, err, sql.ErrNoRows)
 			require.Nil(t, acct)
 
@@ -68,7 +69,7 @@ func TestAccounts(t *testing.T) {
 			require.Equal(t, acct2.Email, got.Email)
 
 			// unknown still works
-			got, err = ByID(ctx, pool, 9999)
+			got, err = ByID(ctx, pool, uuid.New())
 			require.ErrorIs(t, err, sql.ErrNoRows)
 			require.Nil(t, got)
 

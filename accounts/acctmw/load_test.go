@@ -12,6 +12,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb"
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ func TestLoad(t *testing.T) {
 			pool := tc.setup()
 
 			var expectLoggedIn bool
-			var accountID int64
+			var accountID uuid.UUID
 			var sessionID string
 			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionLoad: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				acct := acctctx.Account(r.Context())

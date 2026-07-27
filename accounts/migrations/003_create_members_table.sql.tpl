@@ -1,7 +1,7 @@
 CREATE TABLE "accounts_members" (
-  "id"         SERIAL NOT NULL,
-  "account_id" INTEGER NOT NULL,
-  "group_id"   INTEGER NOT NULL,
+  "id"         UUID DEFAULT uuidv7(),
+  "account_id" UUID NOT NULL,
+  "group_id"   UUID NOT NULL,
   "created"    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY ("id"),

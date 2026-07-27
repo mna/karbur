@@ -2,7 +2,7 @@ CREATE TABLE "tokens_tokens" (
 	"token"         TEXT NOT NULL,
 	"type"          TEXT NOT NULL,
 	"single_use"    BOOLEAN NOT NULL,
-	"ref_id"        BIGINT NOT NULL,
+	"ref_id"        UUID NOT NULL,
 	"expiry"        TIMESTAMPTZ NOT NULL,
 	"idle"          TIMESTAMPTZ NULL,
 	"idle_duration" INTEGER NULL,
