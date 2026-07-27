@@ -102,6 +102,7 @@ UPDATE SET
 	var idleSecs sql.Null[int64]
 	if !args.SingleUse && args.IdleExpiry > 0 {
 		idleSecs.V = int64(args.IdleExpiry / time.Second)
+		idleSecs.Valid = true
 	}
 	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID,

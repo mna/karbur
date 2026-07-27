@@ -75,8 +75,6 @@ func TestLogout(t *testing.T) {
 					require.Empty(t, ck.Value)
 				}
 			}
-
-			// TODO: finish testing, no actual logout!
 		})
 	}
 }

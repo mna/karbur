@@ -184,7 +184,72 @@ func TestPool(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, countAfter, countLast)
 
-			// TODO: test idle expiration, ensure it cannot be set on a single-use
+			// create a single-use token with an idle expiration, it is ignored
+			tok6, err := tt.New(ctx, TokenArgs{
+				Type:           "test",
+				RefID:          6,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Minute,
+				IdleExpiry:     time.Second,
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, tok6)
+
+			// let the idle timeout expire, but does nothing as the idle is not
+			// applied
+			time.Sleep(time.Second + time.Millisecond)
+
+			// it is still valid
+			_, err = tt.Verify(ctx, tok6, nil)
+			require.NoError(t, err)
+
+			// create another single-use token with an ignored idle expiration
+			tok7, err := tt.New(ctx, TokenArgs{
+				Type:           "test",
+				RefID:          7,
+				SingleUse:      true,
+				AbsoluteExpiry: time.Minute,
+				IdleExpiry:     time.Second,
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, tok7)
+
+			// try to force it to have an idle expiry in the DB, triggers the
+			// constraint failure
+			_, err = pool.Exec(ctx, `UPDATE "tokens_tokens" SET "idle" = now() WHERE "token" = $1`, tok7)
+			require.Error(t, err)
+			perr := pgdb.AsProtocolError(err)
+			require.Equal(t, "23514", perr.Code)
+			require.Equal(t, "chk_idle_multi_use_only", perr.ConstraintName)
+
+			// create a multi-use token with an idle expiry
+			tok8, err := tt.New(ctx, TokenArgs{
+				Type:           "test",
+				RefID:          8,
+				SingleUse:      false,
+				AbsoluteExpiry: time.Minute,
+				IdleExpiry:     time.Second,
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, tok8)
+
+			// verify it immediately, it is valid
+			_, err = tt.Verify(ctx, tok8, nil)
+			require.NoError(t, err)
+
+			time.Sleep(100 * time.Millisecond)
+
+			// verify it within idle timeout, it is valid
+			tokv, err := tt.Verify(ctx, tok8, nil)
+			require.NoError(t, err)
+			t.Log(tokv.Idle)
+
+			// let the idle expire
+			time.Sleep(time.Second + time.Millisecond)
+
+			// now invalid
+			_, err = tt.Verify(ctx, tok8, nil)
+			require.ErrorIs(t, err, ErrInvalid)
 		})
 	}
 }
