@@ -29,6 +29,8 @@ type Accounts struct {
 	// ParamsDecoder is the params.Decoder to use to decode HTTP parameters.
 	ParamsDecoder *params.Decoder
 
+	// TODO: password requirements for extra validation.
+
 	// AllowRememberMe indicates if the "remember_me" field is supported in the
 	// login flow. If so, and if "remember_me" is true on login, the session is
 	// persistent and valid for 30 days, otherwise the session expires in 12
