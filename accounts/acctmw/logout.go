@@ -23,6 +23,9 @@ func (a *Accounts) Logout(h http.Handler) http.Handler {
 			return
 		}
 
+		// TODO: check for a logged-in account (non-anonymous), otherwise logout is
+		// a no-op (or even a permission denied)
+
 		if ssnID := acctctx.SessionID(r.Context()); ssnID != "" {
 			if err := a.logout(r.Context(), ssnID); err != nil {
 				a.ErrorHandler(w, r, err)

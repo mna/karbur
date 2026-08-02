@@ -10,6 +10,8 @@ import (
 	"codeberg.org/mna/karbur/tokens"
 )
 
+// TODO: should load the anonymous session too, without a logged-in account.
+
 // Load is a middleware that loads the logged-in account based on the session
 // cookie, if present, so that subsequent handlers have access to the account.
 func (a *Accounts) Load(h http.Handler) http.Handler {

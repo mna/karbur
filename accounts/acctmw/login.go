@@ -59,6 +59,11 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			dur = longSessionDuration
 			maxAge = int(dur / time.Second)
 		}
+		// TODO: invalidate the anonymous session (ensure it was anonymous and not
+		// a login from an already-logged-in state) and map the session data to the
+		// new session. Probably worth a RegenerateSession helper that does that,
+		// sets the cookie appropriately, and maps the existing session data to the
+		// new ID (or not based on arg).
 		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: dur})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
