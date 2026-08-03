@@ -1,7 +1,9 @@
 package acctmw
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"codeberg.org/mna/karbur/accounts/acctctx"
@@ -10,6 +12,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb/pgxadapt"
 	"codeberg.org/mna/karbur/pgdb/testdb"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDelete(t *testing.T) {
@@ -25,16 +28,15 @@ func TestDelete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
 
-			// using the /load action so that the session is loaded before hitting the delete middleware
-			dh := &deferHandler{}
-			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionLoad: dh})
-			dh.h = accts.Delete(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				acct := acctctx.Account(r.Context())
-				ssnID := acctctx.SessionID(r.Context())
-				assert.NotNil(t, acct)
-				assert.Empty(t, ssnID)
-				w.WriteHeader(http.StatusOK)
-			}))
+			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{
+				ActionDelete: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					acct := acctctx.Account(r.Context())
+					ssnID := acctctx.SessionID(r.Context())
+					assert.NotNil(t, acct)
+					assert.Empty(t, ssnID)
+					w.WriteHeader(http.StatusOK)
+				}),
+			})
 			accts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 				code := errors.Code(err)
 				if code == 0 {
@@ -50,7 +52,39 @@ func TestDelete(t *testing.T) {
 			// create a valid account for "a@b"
 			createAccountWithClient(t, client, srv.URL, "a@b", "123")
 
-			// TODO: finish implementing the delete test, with/without a valid password...
+			// request the "delete" page without login
+			res, err := client.Get(srv.URL + "/delete?password=123")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, res.StatusCode)
+
+			doLoginWithClient(t, client, srv.URL, "a@b", "123")
+
+			// request the "delete" page without a password
+			res, err = client.Get(srv.URL + "/delete")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+			// request the "delete" page with wrong password
+			res, err = client.Get(srv.URL + "/delete?password=456")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+			// session cookie is still present
+			assertSessionCookiePresent(t, client.Jar, srv.URL)
+
+			// request the "delete" page with correct password
+			res, err = client.Get(srv.URL + "/delete?password=123")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, res.StatusCode)
+
+			// session cookie is now absent
+			assertSessionCookieAbsent(t, client.Jar, srv.URL)
+
+			// login now fails, unknown account
+			res, err = client.Post(srv.URL+"/login", "application/json",
+				strings.NewReader(fmt.Sprintf(`{"email":%q, "password":%q}`, "a@b", "123")))
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, res.StatusCode)
 		})
 	}
 }

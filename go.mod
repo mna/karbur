@@ -7,29 +7,30 @@ require (
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/georgysavva/scany/v2 v2.1.4
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/schema v1.4.1
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jub0bs/fcors v0.10.0
 	github.com/juju/ratelimit v1.0.2
+	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.12.3
 	github.com/philopon/go-toposort v0.0.0-20170620085441-9be86dbd762f
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.36.0
+	golang.org/x/net v0.38.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.29.0 // indirect

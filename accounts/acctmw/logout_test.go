@@ -55,12 +55,7 @@ func TestLogout(t *testing.T) {
 			res, err := client.Get(srv.URL + "/load")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
-			for _, ck := range res.Cookies() {
-				if ck.Name == "__Host-ssn" {
-					require.Less(t, ck.MaxAge, 0)
-					require.Empty(t, ck.Value)
-				}
-			}
+			assertSessionCookieAbsent(t, client.Jar, srv.URL)
 
 			// do a successful login
 			doLoginWithClient(t, client, srv.URL, "a@b", "123")
@@ -69,12 +64,7 @@ func TestLogout(t *testing.T) {
 			res, err = client.Get(srv.URL + "/load")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
-			for _, ck := range res.Cookies() {
-				if ck.Name == "__Host-ssn" {
-					require.Less(t, ck.MaxAge, 0)
-					require.Empty(t, ck.Value)
-				}
-			}
+			assertSessionCookieAbsent(t, client.Jar, srv.URL)
 		})
 	}
 }

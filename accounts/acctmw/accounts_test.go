@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"codeberg.org/mna/karbur/pgdb/migrate"
 	"codeberg.org/mna/karbur/server/params"
 	"codeberg.org/mna/karbur/tokens"
+	"github.com/justinas/alice"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/publicsuffix"
 )
@@ -50,15 +52,19 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 	}
 
 	routes := map[Action]func(http.Handler) http.Handler{
-		ActionRegister: accts.Register,
-		ActionLogin:    accts.Login,
-		ActionLoad:     accts.Load,
-		ActionLogout:   accts.Logout,
 		// Authorize and Deny endpoints wrap the handler in Load and don't actually
 		// apply any authorization checks by default, the caller should provide it
 		// in the handler.
 		ActionAuthorize: accts.Load,
 		ActionDeny:      accts.Load,
+
+		// Delete wraps both Load and Delete around the final handler.
+		ActionDelete: alice.New(accts.Load, accts.Delete).Then,
+
+		ActionLoad:     accts.Load,
+		ActionLogin:    accts.Login,
+		ActionLogout:   accts.Logout,
+		ActionRegister: accts.Register,
 	}
 
 	mux := http.NewServeMux()
@@ -104,4 +110,33 @@ func doLoginWithClient(tb testing.TB, client *http.Client, srvURL, email, pwd st
 
 func doLogin(tb testing.TB, srvURL, email, pwd string) {
 	doLoginWithClient(tb, http.DefaultClient, srvURL, email, pwd)
+}
+
+func assertSessionCookiePresent(tb testing.TB, jar http.CookieJar, srvURL string) {
+	tb.Helper()
+
+	u, err := url.Parse(srvURL)
+	require.NoError(tb, err)
+
+	var found bool
+	for _, ck := range jar.Cookies(u) {
+		if ck.Name == "__Host-ssn" {
+			found = true
+			require.NotEmpty(tb, ck.Value)
+		}
+	}
+	require.True(tb, found)
+}
+
+func assertSessionCookieAbsent(tb testing.TB, jar http.CookieJar, srvURL string) {
+	tb.Helper()
+
+	u, err := url.Parse(srvURL)
+	require.NoError(tb, err)
+
+	for _, ck := range jar.Cookies(u) {
+		if ck.Name == "__Host-ssn" {
+			require.Empty(tb, ck.Value)
+		}
+	}
 }

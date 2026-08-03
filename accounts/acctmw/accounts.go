@@ -87,13 +87,14 @@ const (
 type Action string
 
 const (
-	ActionRegister  Action = "register"
-	ActionLogin     Action = "login"
-	ActionLoad      Action = "load"
-	ActionLogout    Action = "logout"
+	ActionAnonymous Action = "anonymous"
 	ActionAuthorize Action = "authorize"
-	ActionDeny      Action = "deny"
 	ActionDelete    Action = "delete"
+	ActionDeny      Action = "deny"
+	ActionLoad      Action = "load"
+	ActionLogin     Action = "login"
+	ActionLogout    Action = "logout"
+	ActionRegister  Action = "register"
 )
 
 func validateEmail(email string, act Action) error {
