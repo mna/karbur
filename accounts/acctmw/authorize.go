@@ -16,7 +16,9 @@ const (
 )
 
 // Authorize is a middleware that allows access to h if the request's account
-// is a member of one of the groups.
+// is a member of one of the groups. It expects the authenticated account to be
+// already stored in the context, so the Load middleware should run in front of
+// this middleware.
 //
 // Three special groups exist, "?" for anyone, including
 // anonymous/unauthenticated requests, "*" for any authenticated requests, and
@@ -26,7 +28,9 @@ func (a *Accounts) Authorize(groups []string) func(h http.Handler) http.Handler 
 }
 
 // Deny is a middleware that denies access to h if the request's account is a
-// member of one of the groups.
+// member of one of the groups. It expects the authenticated account to be
+// already stored in the context, so the Load middleware should run in front of
+// this middleware.
 //
 // Three special groups exist, "?" for anyone, including
 // anonymous/unauthenticated requests, "*" for any authenticated requests, and

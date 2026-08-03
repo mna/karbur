@@ -1,8 +1,49 @@
 package acctmw
 
-// TODO: implement anonymous session generation, checks if there is no active
-// session, and if so creates one not associated to any account. This means the
-// load middleware will load a session id but not an account, so the authorize
-// middleware will still work (checks for account). Anonymous session cookie is
-// always session-scoped (deleted when browser closed) and should probably have
-// a short expiration or at least short idle expiration (30 minutes, 12 hours)?
+import (
+	"net/http"
+
+	"codeberg.org/mna/karbur/accounts/acctctx"
+	"codeberg.org/mna/karbur/tokens"
+	"github.com/google/uuid"
+)
+
+// Anonymous is a middleware that generates an anonymous, or "guest", session
+// and stores it in a session-scoped cookie. It expects any existing session to
+// be already loaded when it runs, so the Load middeware should be used in
+// front of this middleware.
+func (a *Accounts) Anonymous(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ssnID := acctctx.SessionID(r.Context()); ssnID == "" {
+			// the anonymous session token is valid for a short duration and has idle
+			// expiration but its cookie is always session-scoped (deleted when
+			// browser is closed)
+			ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{
+				Type:           a.sessionTokenType(),
+				RefID:          uuid.Nil,
+				AbsoluteExpiry: anonymousSessionDuration,
+				IdleExpiry:     idleAnonymousSessionDuration,
+			})
+			if err != nil {
+				a.ErrorHandler(w, r, err)
+				return
+			}
+
+			// store the session ID in the context for subsequent middleware
+			ctx := acctctx.WithSessionID(r.Context(), ssnTok)
+			r = r.WithContext(ctx)
+
+			http.SetCookie(w, &http.Cookie{
+				Name:     "__Host-ssn",
+				Value:    ssnTok,
+				Path:     "/",
+				MaxAge:   0,
+				Secure:   true,
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}

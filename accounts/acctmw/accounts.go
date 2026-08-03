@@ -77,9 +77,11 @@ func (a *Accounts) argon2Params() *argon2id.Params {
 }
 
 const (
-	defaultSessionTokenType = "session"
-	shortSessionDuration    = 12 * time.Hour
-	longSessionDuration     = 30 * 24 * time.Hour
+	defaultSessionTokenType      = "session"
+	shortSessionDuration         = 12 * time.Hour
+	idleAnonymousSessionDuration = 30 * time.Minute
+	anonymousSessionDuration     = shortSessionDuration
+	longSessionDuration          = 30 * 24 * time.Hour
 )
 
 type Action string
