@@ -3,6 +3,7 @@ package acctmw
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -34,14 +35,14 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 		var input loginInput
 		if err := a.ParamsDecoder.Decode(r, &input); err != nil {
 			if !errors.IsTag(err, accounts.AccountsTag) {
-				err = errors.Tag(err, accounts.AccountsTag, "code", "400", "action", string(ActionLogin))
+				err = errors.Tag(err, accounts.AccountsTag, "code", fmt.Sprint(http.StatusBadRequest), "action", string(ActionLogin))
 			}
 			a.ErrorHandler(w, r, err)
 			return
 		}
 		if input.RememberMe && !a.AllowRememberMe {
 			err := errors.TagNew("invalid parameter", accounts.AccountsTag,
-				"code", "400", "parameter", "remember_me", "action", string(ActionLogin))
+				"code", fmt.Sprint(http.StatusBadRequest), "parameter", "remember_me", "action", string(ActionLogin))
 			a.ErrorHandler(w, r, err)
 			return
 		}
