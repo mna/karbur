@@ -63,8 +63,12 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 
 		ActionLoad:     accts.Load,
 		ActionLogin:    accts.Login,
-		ActionLogout:   accts.Logout,
+		ActionLogout:   alice.New(accts.Load, accts.Logout).Then,
 		ActionRegister: accts.Register,
+
+		// special paths to test if account is authenticated or not
+		Action("authenticated"):   alice.New(accts.Load, accts.Authorize([]string{"*"})).Then,
+		Action("unauthenticated"): alice.New(accts.Load, accts.Deny([]string{"*"})).Then,
 	}
 
 	mux := http.NewServeMux()

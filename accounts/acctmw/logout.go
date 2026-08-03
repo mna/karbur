@@ -2,6 +2,7 @@ package acctmw
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -23,25 +24,27 @@ func (a *Accounts) Logout(h http.Handler) http.Handler {
 			return
 		}
 
-		// TODO: check for a logged-in account (non-anonymous), otherwise logout is
-		// a no-op (or even a permission denied)
-
-		if ssnID := acctctx.SessionID(r.Context()); ssnID != "" {
-			if err := a.logout(r.Context(), ssnID); err != nil {
-				a.ErrorHandler(w, r, err)
-				return
-			}
-
-			// clear the logged-in account and session id from the context for
-			// subsequent handlers
-			ctx := acctctx.WithAccount(r.Context(), nil)
-			ctx = acctctx.WithSessionID(ctx, "")
-			r = r.WithContext(ctx)
+		ssnID := acctctx.SessionID(r.Context())
+		acct := acctctx.Account(r.Context())
+		if ssnID == "" || acct == nil {
+			err := errors.TagNew("permission denied", accounts.AccountsTag, "code", fmt.Sprint(http.StatusForbidden),
+				"action", string(ActionLogout))
+			a.ErrorHandler(w, r, err)
+			return
 		}
 
-		// clear the session cookie unconditionally, as it may still be there even
-		// if there was no session id in the context (e.g. unknown session or
-		// corresponding account not found)
+		if err := a.logout(r.Context(), ssnID); err != nil {
+			a.ErrorHandler(w, r, err)
+			return
+		}
+
+		// clear the logged-in account and session id from the context for
+		// subsequent handlers
+		ctx := acctctx.WithAccount(r.Context(), nil)
+		ctx = acctctx.WithSessionID(ctx, "")
+		r = r.WithContext(ctx)
+
+		// clear the session cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "__Host-ssn",
 			Value:    "",

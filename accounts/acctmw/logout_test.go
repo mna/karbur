@@ -27,15 +27,15 @@ func TestLogout(t *testing.T) {
 			pool := tc.setup()
 
 			// using the /load action so that the session is loaded before hitting the logout middleware
-			dh := &deferHandler{}
-			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionLoad: dh})
-			dh.h = accts.Logout(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				acct := acctctx.Account(r.Context())
-				ssnID := acctctx.SessionID(r.Context())
-				assert.Nil(t, acct)
-				assert.Empty(t, ssnID)
-				w.WriteHeader(http.StatusOK)
-			}))
+			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{
+				ActionLogout: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					acct := acctctx.Account(r.Context())
+					ssnID := acctctx.SessionID(r.Context())
+					assert.Nil(t, acct)
+					assert.Empty(t, ssnID)
+					w.WriteHeader(http.StatusOK)
+				}),
+			})
 			accts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 				code := errors.Code(err)
 				if code == 0 {
@@ -52,19 +52,35 @@ func TestLogout(t *testing.T) {
 			createAccountWithClient(t, client, srv.URL, "a@b", "123")
 
 			// request the page without login
-			res, err := client.Get(srv.URL + "/load")
+			res, err := client.Get(srv.URL + "/logout")
 			require.NoError(t, err)
-			require.Equal(t, http.StatusOK, res.StatusCode)
+			require.Equal(t, http.StatusForbidden, res.StatusCode)
 			assertSessionCookieAbsent(t, client.Jar, srv.URL)
+
+			// request the page with unexpected parameters
+			res, err = client.Get(srv.URL + "/logout?foo=bar")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, res.StatusCode)
 
 			// do a successful login
 			doLoginWithClient(t, client, srv.URL, "a@b", "123")
 
-			// request the page after a login
-			res, err = client.Get(srv.URL + "/load")
+			// can request an authenticated page
+			res, err = client.Get(srv.URL + "/authenticated")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, res.StatusCode)
+			assertSessionCookiePresent(t, client.Jar, srv.URL)
+
+			// logout after a login
+			res, err = client.Get(srv.URL + "/logout")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 			assertSessionCookieAbsent(t, client.Jar, srv.URL)
+
+			// fails to request an authenticated page
+			res, err = client.Get(srv.URL + "/authenticated")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, res.StatusCode)
 		})
 	}
 }
