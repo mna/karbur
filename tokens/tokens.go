@@ -132,7 +132,8 @@ const ErrInvalid = errors.ConstError("invalid token")
 
 // Verify loads and verifies if the provided token is valid. If the token is
 // single-use, it is deleted after load as it is not valid anymore. It uses the
-// existing DB transaction if there is one.
+// existing DB transaction if there is one. If the token has an idle timeout
+// and is not expired yet, it is reset.
 //
 // The vfn argument is extra validation to apply on the token before
 // considering it valid. The MustMatchType and MustMatchTypeAndRefID functions

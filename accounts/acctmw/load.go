@@ -8,9 +8,8 @@ import (
 	"codeberg.org/mna/karbur/accounts/acctctx"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/tokens"
+	"github.com/google/uuid"
 )
-
-// TODO: should load the anonymous session too, without a logged-in account.
 
 // Load is a middleware that loads the logged-in account based on the session
 // cookie, if present, so that subsequent handlers have access to the account.
@@ -26,17 +25,24 @@ func (a *Accounts) Load(h http.Handler) http.Handler {
 			}
 
 			if tok != nil {
-				// if account does not exist, do as if no session cookie was present
-				acct, err := accounts.ByID(r.Context(), a.Conn, tok.RefID)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					a.ErrorHandler(w, r, err)
-					return
-				}
+				ctx := r.Context()
 
-				if acct != nil {
-					ctx := acctctx.WithAccount(r.Context(), acct)
+				if tok.RefID == uuid.Nil {
+					// this is an anonymous session
 					ctx = acctctx.WithSessionID(ctx, tok.Token)
 					r = r.WithContext(ctx)
+				} else {
+					// this is not an anonymous session, treat as no session if account not found
+					acct, err := accounts.ByID(ctx, a.Conn, tok.RefID)
+					if err != nil && !errors.Is(err, sql.ErrNoRows) {
+						a.ErrorHandler(w, r, err)
+						return
+					}
+					if acct != nil {
+						ctx = acctctx.WithAccount(ctx, acct)
+						ctx = acctctx.WithSessionID(ctx, tok.Token)
+						r = r.WithContext(ctx)
+					}
 				}
 			}
 		}
