@@ -65,6 +65,9 @@ type TokenArgs struct {
 	// token is successfully verified. It is ignored if SingleUse is true. It is
 	// precise to the second.
 	IdleExpiry time.Duration
+	// Data is arbitrary, application-specific data to store alongside the token.
+	// It gets marshaled and stored as JSON.
+	Data any
 }
 
 // New generates a new random, secure token configured according to args. It
@@ -91,11 +94,12 @@ INSERT INTO
     "ref_id",
     "expiry",
     "idle",
-    "idle_duration"
+    "idle_duration",
+    "data"
   )
 VALUES
   ($1, $2, $3, $4, now() + $5 * interval '1 second',
-  	now() + $6 * interval '1 second', $6)
+  	now() + $6 * interval '1 second', $6, COALESCE($7, 'null')::json)
 ON CONFLICT ("type", "ref_id") WHERE "single_use" DO
 UPDATE SET
   "token" = EXCLUDED."token",
@@ -106,9 +110,18 @@ UPDATE SET
 		idleSecs.V = int64(args.IdleExpiry / time.Second)
 		idleSecs.Valid = true
 	}
+
+	var data json.RawMessage
+	if args.Data != nil {
+		b, err := json.Marshal(args.Data)
+		if err != nil {
+			return "", err
+		}
+		data = json.RawMessage(b)
+	}
 	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
 		_, err := q.Exec(ctx, insertToken, token, args.Type, args.SingleUse, args.RefID,
-			int64(args.AbsoluteExpiry/time.Second), idleSecs)
+			int64(args.AbsoluteExpiry/time.Second), idleSecs, data)
 		return err
 	})
 	if err != nil {
