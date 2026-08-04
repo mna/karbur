@@ -6,6 +6,8 @@ CREATE TABLE "tokens_tokens" (
 	"expiry"        TIMESTAMPTZ NOT NULL,
 	"idle"          TIMESTAMPTZ NULL,
 	"idle_duration" INTEGER NULL,
+	-- not using jsonb because write speed is important and json querying is not.
+  "data"          JSON NOT NULL DEFAULT 'null',
 	"created"       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
 	PRIMARY KEY ("token"),

@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"io/fs"
 	"time"
 
@@ -124,6 +125,7 @@ type Token struct {
 	RefID     uuid.UUID           `db:"ref_id"`
 	Expiry    time.Time           `db:"expiry"`
 	Idle      sql.Null[time.Time] `db:"idle"`
+	Data      json.RawMessage     `db:"data"`
 }
 
 // ErrInvalid is the error returned if an invalid (expired or unknown) token is
@@ -154,7 +156,8 @@ SELECT
   "single_use",
   "ref_id",
   "expiry",
-  "idle"
+  "idle",
+  "data"
 FROM
   "tokens_tokens"
 WHERE
