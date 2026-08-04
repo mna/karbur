@@ -193,6 +193,7 @@ WHERE
 				return err
 			}
 		} else if tok.Idle.Valid {
+			// reset its idle expiration
 			if err := t.ResetIdle(ctx, token); err != nil {
 				return err
 			}
@@ -231,6 +232,23 @@ func MustMatchTypeAndRefID(t string, refID uuid.UUID) func(*Token) error {
 		}
 		return nil
 	}
+}
+
+// UpdateData updates the data associated with the token, regardless of its
+// expiry. It uses the existing DB transaction if there is one.
+func (t *Tokens) UpdateData(ctx context.Context, token string, data json.RawMessage) error {
+	const updateData = `
+UPDATE
+  "tokens_tokens"
+SET
+	"data" = $1
+WHERE
+  "token" = $2
+`
+	return pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, updateData, data, token)
+		return err
+	})
 }
 
 // Delete deletes the specified token, regardless of its expiry. It uses the
