@@ -54,7 +54,7 @@ func (a *Accounts) Load(h http.Handler) http.Handler {
 
 		// if the session data was modified, it needs to be saved back to the DB
 		ctx := r.Context()
-		if ssnData, isDirty := acctctx.SessionData(ctx); isDirty {
+		if ssnData, ssnID, isDirty := acctctx.SessionData(ctx); isDirty {
 			// TODO: after some operations (e.g. going from anonymous to logged in),
 			// the session ID might've changed between before and after the wrapped
 			// handler was called, and we have no way of getting that new session id.

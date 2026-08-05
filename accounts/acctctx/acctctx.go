@@ -34,6 +34,11 @@ func Account(ctx context.Context) *accounts.Account {
 // WithSessionID returns a context that holds the specified session ID.
 // Typically this is the session ID used to authenticate the current account.
 func WithSessionID(ctx context.Context, ssnID string) context.Context {
+	// if there is stored session data, update its ssnID accordingly.
+	v := ctx.Value(sessionDataKey)
+	if ssnData, _ := v.(*sessionData); ssnData != nil {
+		ssnData.ssnID = ssnID
+	}
 	return context.WithValue(ctx, sessionIDKey, ssnID)
 }
 
@@ -46,25 +51,29 @@ func SessionID(ctx context.Context) string {
 }
 
 type sessionData struct {
+	ssnID string
 	data  json.RawMessage
 	dirty bool
 }
 
 // WithSessionData stores the data associated with the current session in the
-// context. This should be the raw data as read from storage (unmodified).
+// context. This should be the raw data as read from storage (unmodified). It
+// must be called after the session ID was loaded in the context.
 func WithSessionData(ctx context.Context, data json.RawMessage) context.Context {
-	return context.WithValue(ctx, sessionDataKey, &sessionData{data: data})
+	// capture the current ssnID associated with this data
+	ssnID := SessionID(ctx)
+	return context.WithValue(ctx, sessionDataKey, &sessionData{data: data, ssnID: ssnID})
 }
 
-// SessionData returns the data associated with the current session, and a
-// boolean indicating if it is dirty (if any changes were made since the call
-// to WithSessionData).
-func SessionData(ctx context.Context) (data json.RawMessage, dirty bool) {
+// SessionData returns the data associated with the session id it returns as
+// second value, and a boolean indicating if the data is dirty (if any changes were
+// made since the call to WithSessionData).
+func SessionData(ctx context.Context) (data json.RawMessage, ssnID string, dirty bool) {
 	v := ctx.Value(sessionDataKey)
 	if ssnData, _ := v.(*sessionData); ssnData != nil {
-		return ssnData.data, ssnData.dirty
+		return ssnData.data, ssnData.ssnID, ssnData.dirty
 	}
-	return nil, false
+	return nil, "", false
 }
 
 // ReplaceSessionData replaces the data associated with the current session

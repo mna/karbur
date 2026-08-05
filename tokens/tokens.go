@@ -63,7 +63,7 @@ type TokenArgs struct {
 	// IdleExpiry is the duration that the token is valid in between calls to
 	// Verify (or between New and Verify). The idle time is reset each time a
 	// token is successfully verified. It is ignored if SingleUse is true. It is
-	// precise to the second.
+	// precise to the second. A zero value means no idle expiry.
 	IdleExpiry time.Duration
 	// Data is arbitrary, application-specific data to store alongside the token.
 	// It gets marshaled and stored as JSON.
@@ -77,14 +77,6 @@ type TokenArgs struct {
 // For single-use tokens, if a token already exists for the same Type and
 // RefID, it is replaced by the new token, invalidating the previous one.
 func (t *Tokens) New(ctx context.Context, args TokenArgs) (string, error) {
-	rawTokenSize := t.RawTokenSize
-	if rawTokenSize <= 0 {
-		rawTokenSize = DefaultRawTokenSize
-	}
-	b := make([]byte, rawTokenSize)
-	_, _ = rand.Read(b)
-	token := base64.RawURLEncoding.EncodeToString(b)
-
 	const insertToken = `
 INSERT INTO
   "tokens_tokens" (
@@ -105,6 +97,9 @@ UPDATE SET
   "token" = EXCLUDED."token",
   "expiry" = EXCLUDED."expiry"
 `
+
+	token := t.generateNewToken()
+
 	var idleSecs sql.Null[int64]
 	if !args.SingleUse && args.IdleExpiry > 0 {
 		idleSecs.V = int64(args.IdleExpiry / time.Second)
@@ -251,6 +246,45 @@ WHERE
 	})
 }
 
+// Rotate generates a new token and updates the token entry of oldToken with
+// that new token. The new token inherits the data from the old token, only the
+// RefID, absolute expiration and idle expiration are reset using args. It is a
+// no-op if oldToken is a single-use token. It uses the existing DB transaction
+// if there is one.
+func (t *Tokens) Rotate(ctx context.Context, oldToken string, args TokenArgs) (string, error) {
+	const updateToken = `
+UPDATE
+  "tokens_tokens"
+SET
+	"token" = $1,
+	"ref_id" = $2,
+  "expiry" = now() + $3 * interval '1 second',
+  "idle" = now() + $4 * interval '1 second',
+  "idle_duration" = $4
+WHERE
+  "token" = $5 AND
+  "single_use" IS FALSE
+`
+
+	newToken := t.generateNewToken()
+
+	var idleSecs sql.Null[int64]
+	if args.IdleExpiry > 0 {
+		idleSecs.V = int64(args.IdleExpiry / time.Second)
+		idleSecs.Valid = true
+	}
+	absSecs := int64(args.AbsoluteExpiry / time.Second)
+
+	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
+		_, err := q.Exec(ctx, updateToken, newToken, args.RefID, absSecs, idleSecs, oldToken)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return newToken, nil
+}
+
 // Delete deletes the specified token, regardless of its expiry. It uses the
 // existing DB transaction if there is one.
 func (t *Tokens) Delete(ctx context.Context, token string) error {
@@ -314,4 +348,14 @@ func (t *Tokens) Cleanup(ctx context.Context) error {
 		_, err := q.Exec(ctx, cleanupTokens)
 		return err
 	})
+}
+
+func (t *Tokens) generateNewToken() string {
+	rawTokenSize := t.RawTokenSize
+	if rawTokenSize <= 0 {
+		rawTokenSize = DefaultRawTokenSize
+	}
+	b := make([]byte, rawTokenSize)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
 }
