@@ -13,9 +13,8 @@ import (
 type ctxKey int
 
 const (
-	accountKey     = ctxKey(0)
-	sessionIDKey   = ctxKey(1)
-	sessionDataKey = ctxKey(2)
+	accountKey = ctxKey(0)
+	sessionKey = ctxKey(1)
 )
 
 // WithAccount returns a context that holds the specified account. Typically
@@ -31,58 +30,45 @@ func Account(ctx context.Context) *accounts.Account {
 	return acct
 }
 
-// WithSessionID returns a context that holds the specified session ID.
-// Typically this is the session ID used to authenticate the current account.
-func WithSessionID(ctx context.Context, ssnID string) context.Context {
-	// if there is stored session data, update its ssnID accordingly.
-	v := ctx.Value(sessionDataKey)
-	if ssnData, _ := v.(*sessionData); ssnData != nil {
-		ssnData.ssnID = ssnID
-	}
-	return context.WithValue(ctx, sessionIDKey, ssnID)
+// WithSession returns a context that holds the specified session information.
+func WithSession(ctx context.Context, ssnID string, ssnData json.RawMessage) context.Context {
+	return context.WithValue(ctx, sessionKey, &session{id: ssnID, data: ssnData})
+}
+
+type session struct {
+	id    string
+	data  json.RawMessage
+	dirty bool
 }
 
 // SessionID returns the session ID stored in the context or an empty string if
 // there is none.
 func SessionID(ctx context.Context) string {
-	v := ctx.Value(sessionIDKey)
-	ssnID, _ := v.(string)
-	return ssnID
-}
-
-type sessionData struct {
-	ssnID string
-	data  json.RawMessage
-	dirty bool
-}
-
-// WithSessionData stores the data associated with the current session in the
-// context. This should be the raw data as read from storage (unmodified). It
-// must be called after the session ID was loaded in the context.
-func WithSessionData(ctx context.Context, data json.RawMessage) context.Context {
-	// capture the current ssnID associated with this data
-	ssnID := SessionID(ctx)
-	return context.WithValue(ctx, sessionDataKey, &sessionData{data: data, ssnID: ssnID})
-}
-
-// SessionData returns the data associated with the session id it returns as
-// second value, and a boolean indicating if the data is dirty (if any changes were
-// made since the call to WithSessionData).
-func SessionData(ctx context.Context) (data json.RawMessage, ssnID string, dirty bool) {
-	v := ctx.Value(sessionDataKey)
-	if ssnData, _ := v.(*sessionData); ssnData != nil {
-		return ssnData.data, ssnData.ssnID, ssnData.dirty
+	v := ctx.Value(sessionKey)
+	if ssn, _ := v.(*session); ssn != nil {
+		return ssn.id
 	}
-	return nil, "", false
+	return ""
+}
+
+// Session returns the current session id and its associated data, along with a
+// boolean indicating if the data is dirty (if any changes were made since the
+// call to WithSession).
+func Session(ctx context.Context) (ssnID string, data json.RawMessage, dirty bool) {
+	v := ctx.Value(sessionKey)
+	if ssn, _ := v.(*session); ssn != nil {
+		return ssn.id, ssn.data, ssn.dirty
+	}
+	return "", nil, false
 }
 
 // ReplaceSessionData replaces the data associated with the current session
 // with the JSON-marshaled version of p, and marks the session data as dirty.
 // It always assumes that the data changed when this function is called.
 func ReplaceSessionData(ctx context.Context, p any) error {
-	v := ctx.Value(sessionDataKey)
-	ssnData, _ := v.(*sessionData)
-	if ssnData == nil {
+	v := ctx.Value(sessionKey)
+	ssn, _ := v.(*session)
+	if ssn == nil {
 		return errors.New("no existing session data to replace")
 	}
 
@@ -90,7 +76,7 @@ func ReplaceSessionData(ctx context.Context, p any) error {
 	if err != nil {
 		return err
 	}
-	ssnData.data = json.RawMessage(data)
-	ssnData.dirty = true
+	ssn.data = json.RawMessage(data)
+	ssn.dirty = true
 	return nil
 }

@@ -17,9 +17,12 @@ import (
 // authenticated session, they generate an anonymous session immediately for
 // the wrapped handler to use.
 
-// Load is a middleware that loads the logged-in account based on the session
-// cookie, if present, so that subsequent handlers have access to the account.
-func (a *Accounts) Load(h http.Handler) http.Handler {
+// Session is a middleware that ensures a session is always present for the
+// wrapped handler. It loads the logged-in account based on the session cookie,
+// if present, or the anonymous session, and generates a new anonymous session
+// if none is present. The only exception is if a server error occurs, the
+// ErrorHandler may be called without an active session.
+func (a *Accounts) Session(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ck, _ := r.Cookie("__Host-ssn"); ck != nil {
 			ssnTok := ck.Value
@@ -71,4 +74,35 @@ func (a *Accounts) Load(h http.Handler) http.Handler {
 			}
 		}
 	})
+}
+
+func (a *Accounts) generateAnonymousSession(w http.ResponseWriter, r *http.Request) *http.Request {
+	// the anonymous session token is valid for a short duration and has idle
+	// expiration but its cookie is always session-scoped (deleted when browser
+	// is closed)
+	ssnTok, ssnData, err := a.Tokens.New(r.Context(), tokens.TokenArgs{
+		Type:           a.sessionTokenType(),
+		RefID:          uuid.Nil,
+		AbsoluteExpiry: anonymousSessionDuration,
+		IdleExpiry:     idleAnonymousSessionDuration,
+	})
+	if err != nil {
+		a.ErrorHandler(w, r, err)
+		return r
+	}
+
+	// store the session in the context for subsequent middleware
+	ctx := acctctx.WithSession(r.Context(), ssnTok, ssnData)
+	r = r.WithContext(ctx)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "__Host-ssn",
+		Value:    ssnTok,
+		Path:     "/",
+		MaxAge:   0,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	return r
 }
