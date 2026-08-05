@@ -72,11 +72,12 @@ type TokenArgs struct {
 
 // New generates a new random, secure token configured according to args. It
 // uses the existing DB transaction if there is one. The token is
-// base64-url-encoded so it is safe to use in URLs and cookies if needed.
+// base64-url-encoded so it is safe to use in URLs and cookies if needed. The
+// JSON-marshaled token data is also returned.
 //
 // For single-use tokens, if a token already exists for the same Type and
 // RefID, it is replaced by the new token, invalidating the previous one.
-func (t *Tokens) New(ctx context.Context, args TokenArgs) (string, error) {
+func (t *Tokens) New(ctx context.Context, args TokenArgs) (string, json.RawMessage, error) {
 	const insertToken = `
 INSERT INTO
   "tokens_tokens" (
@@ -91,7 +92,7 @@ INSERT INTO
   )
 VALUES
   ($1, $2, $3, $4, now() + $5 * interval '1 second',
-  	now() + $6 * interval '1 second', $6, COALESCE($7, 'null')::json)
+  	now() + $6 * interval '1 second', $6, $7::json)
 ON CONFLICT ("type", "ref_id") WHERE "single_use" DO
 UPDATE SET
   "token" = EXCLUDED."token",
@@ -106,11 +107,11 @@ UPDATE SET
 		idleSecs.Valid = true
 	}
 
-	var data json.RawMessage
+	data := json.RawMessage(`null`)
 	if args.Data != nil {
 		b, err := json.Marshal(args.Data)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		data = json.RawMessage(b)
 	}
@@ -120,9 +121,9 @@ UPDATE SET
 		return err
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return token, nil
+	return token, data, nil
 }
 
 // Token represents a token loaded via Verify.

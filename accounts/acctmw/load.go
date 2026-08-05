@@ -11,6 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: rename this middleware to Session, make it ensure that the wrapped
+// handler is always called with a valid session (anonymous or not). Then the
+// login, logout and delete middleware must also ensure that after changing the
+// authenticated session, they generate an anonymous session immediately for
+// the wrapped handler to use.
+
 // Load is a middleware that loads the logged-in account based on the session
 // cookie, if present, so that subsequent handlers have access to the account.
 func (a *Accounts) Load(h http.Handler) http.Handler {
