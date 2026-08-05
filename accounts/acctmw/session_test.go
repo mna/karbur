@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoad(t *testing.T) {
+func TestSession(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func() pgdb.Pool
@@ -33,7 +33,7 @@ func TestLoad(t *testing.T) {
 			var expectLoggedIn bool
 			var accountID uuid.UUID
 			var sessionID string
-			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionLoad: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionSession: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				acct := acctctx.Account(r.Context())
 				ssnID := acctctx.SessionID(r.Context())
 				if expectLoggedIn {

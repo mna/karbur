@@ -91,10 +91,10 @@ const (
 	ActionAuthorize Action = "authorize"
 	ActionDelete    Action = "delete"
 	ActionDeny      Action = "deny"
-	ActionLoad      Action = "load"
 	ActionLogin     Action = "login"
 	ActionLogout    Action = "logout"
 	ActionRegister  Action = "register"
+	ActionSession   Action = "session"
 )
 
 func validateEmail(email string, act Action) error {

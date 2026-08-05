@@ -53,6 +53,10 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			return
 		}
 
+		// TODO: extract generateAuthenticatedSession similar to the anonymous version, with a rememberMe arg
+		// that controls the durations, and detect if an anonymous one existed and if so rotate it, otherwise
+		// create brand new (if no anonymous or a previous-different authenticated one).
+
 		// create the session token and the cookie to store it
 		var maxAge int
 		dur := shortSessionDuration

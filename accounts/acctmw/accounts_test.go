@@ -61,7 +61,7 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 		// Delete wraps both Load and Delete around the final handler.
 		ActionDelete: alice.New(accts.Load, accts.Delete).Then,
 
-		ActionLoad:     accts.Load,
+		ActionSession:  accts.Load,
 		ActionLogin:    accts.Login,
 		ActionLogout:   alice.New(accts.Load, accts.Logout).Then,
 		ActionRegister: accts.Register,

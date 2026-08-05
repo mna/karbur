@@ -31,8 +31,16 @@ func Account(ctx context.Context) *accounts.Account {
 }
 
 // WithSession returns a context that holds the specified session information.
+// Unlike ResetSession, WithSession always stores a new session entry in the
+// context. It should be used for the initial set of the session, typically
+// called automatically by the Session middleware.
 func WithSession(ctx context.Context, ssnID string, ssnData json.RawMessage) context.Context {
 	return context.WithValue(ctx, sessionKey, &session{id: ssnID, data: ssnData})
+}
+
+func ResetSession(ctx context.Context, ssnID string, ssnData json.RawMessage) context.Context {
+	// TODO: replace an existing sessionKey value with those args, panic if none.
+	panic("unimplemented")
 }
 
 type session struct {
