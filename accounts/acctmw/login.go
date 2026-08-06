@@ -3,6 +3,7 @@ package acctmw
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -63,21 +64,69 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 		//   create a new one with the existing session data
 		expiry, maxAge := authenticatedSessionDurations(input.RememberMe)
 
-		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: expiry})
-		if err != nil {
-			a.ErrorHandler(w, r, err)
-			return
+		ctx := r.Context()
+
+		var (
+			createNewSession bool
+			sessionData      json.RawMessage
+		)
+		oldSessionID := acctctx.SessionID(ctx)
+		if oldAcct := acctctx.Account(ctx); oldAcct != nil {
+			// login while an(other?) account was already logged in, delete the
+			// previous session and create a new one
+			if oldSessionID != "" {
+				if err := a.Tokens.Delete(ctx, oldSessionID); err != nil {
+					a.ErrorHandler(w, r, err)
+					return
+				}
+			}
+			createNewSession = true
+			sessionData = nil
+		} else {
+			// anonymous session, create new session if it is an unsaved anonymous
+			// session
+			createNewSession = oldSessionID == ""
+
+			// keep existing data from memory
+			_, data, _ := acctctx.Session(ctx)
+			sessionData = data
 		}
 
-		// store the logged-in account and session ID in the context for subsequent
+		var newSessionID string
+		if createNewSession {
+			var err error
+			newSessionID, sessionData, err = a.Tokens.New(ctx, tokens.TokenArgs{
+				Type:           a.sessionTokenType(),
+				RefID:          acct.ID,
+				AbsoluteExpiry: expiry,
+				Data:           sessionData,
+			})
+			if err != nil {
+				a.ErrorHandler(w, r, err)
+				return
+			}
+		} else {
+			var err error
+			newSessionID, err = a.Tokens.Rotate(ctx, oldSessionID, tokens.TokenArgs{
+				RefID:          acct.ID,
+				AbsoluteExpiry: expiry,
+				Data:           sessionData,
+			})
+			if err != nil {
+				a.ErrorHandler(w, r, err)
+				return
+			}
+		}
+
+		// store the logged-in account and session in the context for subsequent
 		// middleware
-		ctx := acctctx.WithAccount(r.Context(), acct)
-		ctx = acctctx.WithSessionID(ctx, ssnTok)
+		acctctx.ResetSession(ctx, newSessionID, sessionData)
+		ctx = acctctx.WithAccount(ctx, acct)
 		r = r.WithContext(ctx)
 
 		http.SetCookie(w, &http.Cookie{
 			Name:     "__Host-ssn",
-			Value:    ssnTok,
+			Value:    newSessionID,
 			Path:     "/",
 			MaxAge:   maxAge,
 			Secure:   true,
