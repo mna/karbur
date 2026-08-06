@@ -17,6 +17,8 @@ const (
 	sessionKey = ctxKey(1)
 )
 
+var nullJSON = json.RawMessage("null")
+
 // WithAccount returns a context that holds the specified account. Typically
 // this is the currently authenticated account.
 func WithAccount(ctx context.Context, acct *accounts.Account) context.Context {
@@ -33,14 +35,38 @@ func Account(ctx context.Context) *accounts.Account {
 // WithSession returns a context that holds the specified session information.
 // Unlike ResetSession, WithSession always stores a new session entry in the
 // context. It should be used for the initial set of the session, typically
-// called automatically by the Session middleware.
+// called automatically by the Session middleware. An empty ssnID indicates
+// that a new anonymous session should be created to store the data when the
+// Session middleware exits.
+//
+// As a special case, if ssnData is nil or empty slice, it will be stored as
+// JSON "null".
 func WithSession(ctx context.Context, ssnID string, ssnData json.RawMessage) context.Context {
+	if len(ssnData) == 0 {
+		ssnData = nullJSON
+	}
 	return context.WithValue(ctx, sessionKey, &session{id: ssnID, data: ssnData})
 }
 
-func ResetSession(ctx context.Context, ssnID string, ssnData json.RawMessage) context.Context {
-	// TODO: replace an existing sessionKey value with those args, panic if none.
-	panic("unimplemented")
+// ResetSession updates an existing context session in-place with the provided
+// ssnID and ssnData, marking the data as unmodified. It should be used when
+// the session id changes inside the handler wrapped by the Session middleware
+// (e.g. after a login, going from anonymous to authenticated, or the reverse
+// after a logout or a delete account).
+//
+// As a special case, if ssnData is nil or empty slice, it will be stored as
+// JSON "null".
+func ResetSession(ctx context.Context, ssnID string, ssnData json.RawMessage) {
+	v := ctx.Value(sessionKey)
+	ssn, _ := v.(*session)
+	if ssn == nil {
+		panic("ResetSession called without an existing Session in the context")
+	}
+
+	if len(ssnData) == 0 {
+		ssnData = nullJSON
+	}
+	*ssn = session{id: ssnID, data: ssnData}
 }
 
 type session struct {
@@ -61,7 +87,7 @@ func SessionID(ctx context.Context) string {
 
 // Session returns the current session id and its associated data, along with a
 // boolean indicating if the data is dirty (if any changes were made since the
-// call to WithSession).
+// call to WithSession or ResetSession).
 func Session(ctx context.Context) (ssnID string, data json.RawMessage, dirty bool) {
 	v := ctx.Value(sessionKey)
 	if ssn, _ := v.(*session); ssn != nil {

@@ -248,10 +248,10 @@ WHERE
 }
 
 // Rotate generates a new token and updates the token entry of oldToken with
-// that new token. The new token inherits the data from the old token, only the
-// RefID, absolute expiration and idle expiration are reset using args. It is a
-// no-op if oldToken is a single-use token. It uses the existing DB transaction
-// if there is one.
+// that new token. The new token inherits the type and data from the old token,
+// only the RefID, absolute expiration and idle expiration are reset using
+// args. It is a no-op if oldToken is a single-use token. It uses the existing
+// DB transaction if there is one.
 func (t *Tokens) Rotate(ctx context.Context, oldToken string, args TokenArgs) (string, error) {
 	const updateToken = `
 UPDATE

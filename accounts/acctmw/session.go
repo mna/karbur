@@ -2,6 +2,7 @@ package acctmw
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 
 	"codeberg.org/mna/karbur/accounts"
@@ -12,15 +13,15 @@ import (
 )
 
 // TODO: the login, logout and delete middleware must also ensure that after
-// changing the authenticated session, they generate an anonymous session
-// immediately for the wrapped handler to use (and this Session middleware must
-// correctly set any session data updates to the new anonymous session).
+// changing the authenticated session, they enable a lazy-created anonymous
+// session immediately for the wrapped handler to use (and this Session
+// middleware must correctly set any session data updates to the new anonymous
+// session).
 
 // Session is a middleware that ensures a session is always present for the
-// wrapped handler. It loads the logged-in account based on the session cookie,
-// if present, or the anonymous session, and generates a new anonymous session
-// if none is present. The only exception is if a server error occurs, the
-// ErrorHandler may be called without an active session.
+// wrapped handler. It loads the logged-in account or anonymous session based
+// on the session cookie, if present, or generates a new anonymous session
+// (that will be lazily-created if session data is needed) if none is present.
 func (a *Accounts) Session(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var tok *tokens.Token
@@ -39,24 +40,25 @@ func (a *Accounts) Session(h http.Handler) http.Handler {
 			// an invalid/expired token will have tok == nil, which is as if not present
 		}
 
+		var (
+			ssnID   string
+			ssnData json.RawMessage
+			acct    *accounts.Account
+		)
 		switch {
 		case tok == nil:
-			// no active session, create an anonymous one
-			newr, stop := a.generateAnonymousSession(w, r)
-			if stop {
-				return
-			}
-			r = newr
+			// no active session, will create an anonymous one
 
 		case tok.RefID == uuid.Nil:
 			// this is an existing anonymous session
-			ctx = acctctx.WithSession(ctx, tok.Token, tok.Data)
-			r = r.WithContext(ctx)
+			ssnID = tok.Token
+			ssnData = tok.Data
 
 		default:
 			// this is an authenticated session, treat as no session if account
 			// not found
-			acct, err := accounts.ByID(ctx, a.Conn, tok.RefID)
+			var err error
+			acct, err = accounts.ByID(ctx, a.Conn, tok.RefID)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				a.ErrorHandler(w, r, err)
 				return
@@ -69,21 +71,19 @@ func (a *Accounts) Session(h http.Handler) http.Handler {
 					a.ErrorHandler(w, r, err)
 					return
 				}
-
-				// no active session, create an anonymous one
-				newr, stop := a.generateAnonymousSession(w, r)
-				if stop {
-					return
-				}
-				r = newr
-
+				// no active session, will create an anonymous one
 			} else {
 				// authenticated account was found, continue with this active session
-				ctx = acctctx.WithAccount(ctx, acct)
-				ctx = acctctx.WithSession(ctx, tok.Token, tok.Data)
-				r = r.WithContext(ctx)
+				ssnID = tok.Token
+				ssnData = tok.Data
 			}
 		}
+
+		if acct != nil {
+			ctx = acctctx.WithAccount(ctx, acct)
+		}
+		ctx = acctctx.WithSession(ctx, ssnID, ssnData)
+		r = r.WithContext(ctx)
 
 		// call the wrapped handler
 		h.ServeHTTP(w, r)
@@ -91,15 +91,23 @@ func (a *Accounts) Session(h http.Handler) http.Handler {
 		// if the session data was modified, it needs to be saved back to the DB
 		ctx = r.Context()
 		if ssnID, ssnData, isDirty := acctctx.Session(ctx); isDirty {
-			if err := a.Tokens.UpdateData(ctx, ssnID, ssnData); err != nil {
-				a.ErrorHandler(w, r, err)
-				return
+			if ssnID == "" {
+				// generate new anonymous session
+				if _, stop := a.generateNewAnonymousSession(w, r, ssnData); stop {
+					return
+				}
+			} else {
+				// update data of an existing session
+				if err := a.Tokens.UpdateData(ctx, ssnID, ssnData); err != nil {
+					a.ErrorHandler(w, r, err)
+					return
+				}
 			}
 		}
 	})
 }
 
-func (a *Accounts) generateAnonymousSession(w http.ResponseWriter, r *http.Request) (newr *http.Request, stop bool) {
+func (a *Accounts) generateNewAnonymousSession(w http.ResponseWriter, r *http.Request, data json.RawMessage) (newr *http.Request, stop bool) {
 	// the anonymous session token is valid for a short duration and has idle
 	// expiration but its cookie is always session-scoped (deleted when browser
 	// is closed)
@@ -108,6 +116,7 @@ func (a *Accounts) generateAnonymousSession(w http.ResponseWriter, r *http.Reque
 		RefID:          uuid.Nil,
 		AbsoluteExpiry: anonymousSessionDuration,
 		IdleExpiry:     idleAnonymousSessionDuration,
+		Data:           data,
 	})
 	if err != nil {
 		a.ErrorHandler(w, r, err)
