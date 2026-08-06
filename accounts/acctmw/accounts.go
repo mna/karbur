@@ -87,7 +87,6 @@ const (
 type Action string
 
 const (
-	ActionAnonymous Action = "anonymous"
 	ActionAuthorize Action = "authorize"
 	ActionDelete    Action = "delete"
 	ActionDeny      Action = "deny"

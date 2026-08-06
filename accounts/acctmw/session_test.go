@@ -30,19 +30,26 @@ func TestSession(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := tc.setup()
 
-			var expectLoggedIn bool
+			var expectLoggedIn, expectAnonymous bool
 			var accountID uuid.UUID
 			var sessionID string
 			accts, srv := setupAccounts(t, pool, map[Action]http.Handler{ActionSession: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				acct := acctctx.Account(r.Context())
 				ssnID := acctctx.SessionID(r.Context())
-				if expectLoggedIn {
+				switch {
+				case expectLoggedIn:
 					assert.NotNil(t, acct)
 					assert.Equal(t, "a@b", acct.Email)
 					assert.NotEmpty(t, ssnID)
 					accountID = acct.ID
 					sessionID = ssnID
-				} else {
+
+				case expectAnonymous:
+					assert.Nil(t, acct)
+					assert.NotEmpty(t, ssnID)
+					sessionID = ssnID
+
+				default:
 					assert.Nil(t, acct)
 					assert.Empty(t, ssnID)
 				}
@@ -63,9 +70,10 @@ func TestSession(t *testing.T) {
 			// create a valid account for "a@b"
 			createAccountWithClient(t, client, srv.URL, "a@b", "123")
 
-			// request the "load" page without login
+			// request the "session" page without login
 			expectLoggedIn = false
-			res, err := client.Get(srv.URL + "/load")
+			expectAnonymous = false
+			res, err := client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -75,7 +83,7 @@ func TestSession(t *testing.T) {
 			require.Equal(t, 400, res.StatusCode)
 
 			expectLoggedIn = false
-			res, err = client.Get(srv.URL + "/load")
+			res, err = client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -83,7 +91,7 @@ func TestSession(t *testing.T) {
 			doLoginWithClient(t, client, srv.URL, "a@b", "123")
 
 			expectLoggedIn = true
-			res, err = client.Get(srv.URL + "/load")
+			res, err = client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 			require.NotZero(t, accountID)
@@ -94,7 +102,7 @@ func TestSession(t *testing.T) {
 			require.NoError(t, err)
 
 			expectLoggedIn = false
-			res, err = client.Get(srv.URL + "/load")
+			res, err = client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -103,7 +111,7 @@ func TestSession(t *testing.T) {
 			require.NoError(t, err)
 
 			expectLoggedIn = false
-			res, err = client.Get(srv.URL + "/load")
+			res, err = client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
 		})

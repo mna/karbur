@@ -52,23 +52,23 @@ func setupAccounts(tb testing.TB, pool pgdb.Pool, handlers map[Action]http.Handl
 	}
 
 	routes := map[Action]func(http.Handler) http.Handler{
-		// Authorize and Deny endpoints wrap the handler in Load and don't actually
+		// Authorize and Deny endpoints wrap the handler in Session and don't actually
 		// apply any authorization checks by default, the caller should provide it
 		// in the handler.
-		ActionAuthorize: accts.Load,
-		ActionDeny:      accts.Load,
+		ActionAuthorize: accts.Session,
+		ActionDeny:      accts.Session,
 
-		// Delete wraps both Load and Delete around the final handler.
-		ActionDelete: alice.New(accts.Load, accts.Delete).Then,
+		// Delete wraps both Session and Delete around the final handler.
+		ActionDelete: alice.New(accts.Session, accts.Delete).Then,
 
-		ActionSession:  accts.Load,
-		ActionLogin:    accts.Login,
-		ActionLogout:   alice.New(accts.Load, accts.Logout).Then,
-		ActionRegister: accts.Register,
+		ActionSession:  accts.Session,
+		ActionLogin:    alice.New(accts.Session, accts.Login).Then,
+		ActionLogout:   alice.New(accts.Session, accts.Logout).Then,
+		ActionRegister: alice.New(accts.Session, accts.Register).Then,
 
 		// special paths to test if account is authenticated or not
-		Action("authenticated"):   alice.New(accts.Load, accts.Authorize([]string{"*"})).Then,
-		Action("unauthenticated"): alice.New(accts.Load, accts.Deny([]string{"*"})).Then,
+		Action("authenticated"):   alice.New(accts.Session, accts.Authorize([]string{"*"})).Then,
+		Action("unauthenticated"): alice.New(accts.Session, accts.Deny([]string{"*"})).Then,
 	}
 
 	mux := http.NewServeMux()

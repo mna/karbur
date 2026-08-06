@@ -29,7 +29,8 @@ func (i *deleteInput) Validate() error {
 // provided password is valid.
 //
 // Note that the logged-in account is still in the context when h is called, in
-// case subsequent application-specific cleanup is required.
+// case subsequent application-specific cleanup is required. However the client
+// is logged out and any sessions for this account are deleted.
 func (a *Accounts) Delete(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var input deleteInput
@@ -66,9 +67,8 @@ func (a *Accounts) Delete(h http.Handler) http.Handler {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		// clear the session ID from the context
-		ctx := acctctx.WithSessionID(r.Context(), "")
-		r = r.WithContext(ctx)
+		// clear the session from the context, resetting to an anonymous one
+		acctctx.ResetSession(r.Context(), "", nil)
 
 		// NOTE: we deliberately do not clear the context's account, in case the
 		// subsequent handlers need to do something with it (e.g. clear additional

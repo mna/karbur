@@ -11,6 +11,7 @@ import (
 	"codeberg.org/mna/karbur/errors"
 )
 
+// Logout is a middleware that logs out the currently logged-in account.
 func (a *Accounts) Logout(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// decode parameters in an empty struct to ensure there are no invalid
@@ -38,10 +39,10 @@ func (a *Accounts) Logout(h http.Handler) http.Handler {
 			return
 		}
 
-		// clear the logged-in account and session id from the context for
+		// clear the logged-in account and reset the session from the context for
 		// subsequent handlers
+		acctctx.ResetSession(r.Context(), "", nil)
 		ctx := acctctx.WithAccount(r.Context(), nil)
-		ctx = acctctx.WithSessionID(ctx, "")
 		r = r.WithContext(ctx)
 
 		// clear the session cookie
