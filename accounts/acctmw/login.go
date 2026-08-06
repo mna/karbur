@@ -58,18 +58,22 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 		// create brand new (if no anonymous or a previous-different authenticated one).
 
 		// create the session token and the cookie to store it
-		var maxAge int
-		dur := shortSessionDuration
-		if input.RememberMe {
-			dur = longSessionDuration
-			maxAge = int(dur / time.Second)
-		}
+		expiry, maxAge := authenticatedSessionDurations(input.RememberMe)
+
+		// the logic regarding the existing session vs the new logged-in one is as follows:
+		//   * if there was already an authenticated session, replace it with a brand
+		//   new one and delete the old authenticated session
+		//   * if there was a saved anonymous session (session id is not empty),
+		//   rotate it to the authenticated one
+		//   * if there was an unsaved anonymous session (session id is empty),
+		//   create a new one with the existing session data
+
 		// TODO: invalidate the anonymous session (ensure it was anonymous and not
 		// a login from an already-logged-in state) and map the session data to the
 		// new session. Probably worth a RegenerateSession helper that does that,
 		// sets the cookie appropriately, and maps the existing session data to the
 		// new ID (or not based on arg).
-		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: dur})
+		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: expiry})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
 			return
@@ -119,4 +123,14 @@ func (a *Accounts) login(ctx context.Context, email, password string) (*accounts
 			"code", "400", "parameter", "password", "action", string(ActionLogin))
 	}
 	return acct, nil
+}
+
+func authenticatedSessionDurations(rememberMe bool) (expiry time.Duration, maxAge int) {
+	// without remember me, the cookie is session-scoped (no max age)
+	expiry = shortSessionDuration
+	if rememberMe {
+		expiry = longSessionDuration
+		maxAge = int(expiry / time.Second)
+	}
+	return expiry, maxAge
 }
