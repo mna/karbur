@@ -40,6 +40,14 @@ func (a *Accounts) Register(h http.Handler) http.Handler {
 			return
 		}
 
+		if a.PasswordValidator != nil {
+			if err := a.PasswordValidator(input.Password); err != nil {
+				err = errors.Tag(err, accounts.AccountsTag, "code", "400", "action", string(ActionRegister))
+				a.ErrorHandler(w, r, err)
+				return
+			}
+		}
+
 		if err := a.register(r.Context(), input.Email, input.Password); err != nil {
 			a.ErrorHandler(w, r, err)
 			return

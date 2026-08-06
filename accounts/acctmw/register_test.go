@@ -125,6 +125,8 @@ func TestRegister(t *testing.T) {
 					res, err := http.Post(srv.URL+"/register", c.contentType, bytes.NewReader(c.body))
 					require.NoError(t, err)
 					require.Equal(t, c.wantCode, res.StatusCode)
+
+					// TODO: test with a custom PasswordValidator
 				})
 			}
 		})

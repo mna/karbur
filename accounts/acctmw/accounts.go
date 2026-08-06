@@ -29,7 +29,11 @@ type Accounts struct {
 	// ParamsDecoder is the params.Decoder to use to decode HTTP parameters.
 	ParamsDecoder *params.Decoder
 
-	// TODO: password requirements for extra validation.
+	// PasswordValidator is an optional function that is called with the raw
+	// password when registering a new account, to validate application-specific
+	// strength requirements. Any error returned from this function is routed to
+	// the ErrorHandler, just like other parameter validation errors.
+	PasswordValidator func(string) error
 
 	// AllowRememberMe indicates if the "remember_me" field is supported in the
 	// login flow. If so, and if "remember_me" is true on login, the session is

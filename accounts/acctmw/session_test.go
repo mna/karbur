@@ -114,6 +114,8 @@ func TestSession(t *testing.T) {
 			res, err = client.Get(srv.URL + "/session")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, res.StatusCode)
+
+			// TODO: test more session workflows around session data, session rotation (login/logout/delete)
 		})
 	}
 }
