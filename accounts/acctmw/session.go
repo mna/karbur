@@ -12,12 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: the login, logout and delete middleware must also ensure that after
-// changing the authenticated session, they enable a lazy-created anonymous
-// session immediately for the wrapped handler to use (and this Session
-// middleware must correctly set any session data updates to the new anonymous
-// session).
-
 // Session is a middleware that ensures a session is always present for the
 // wrapped handler. It loads the logged-in account or anonymous session based
 // on the session cookie, if present, or generates a new anonymous session

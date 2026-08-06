@@ -311,14 +311,13 @@ func TestPool(t *testing.T) {
 			require.Equal(t, json.RawMessage(`1`), tokv.Data)
 			require.True(t, tokv.Idle.Valid)
 
-			// rotate the token to a new one without idle expiry
+			// rotate the token to a new one without idle expiry, keeping the data
 			tok10bRefID := uuid.New()
 			tok10b, err := tt.Rotate(ctx, tok10, TokenArgs{
 				Type:           "zzzz", // ignored
 				RefID:          tok10bRefID,
-				AbsoluteExpiry: time.Second,
+				AbsoluteExpiry: time.Minute,
 				IdleExpiry:     0,
-				Data:           json.RawMessage(`2`), // ignored
 			})
 			require.NoError(t, err)
 			require.NotEmpty(t, tok10b)
@@ -336,11 +335,35 @@ func TestPool(t *testing.T) {
 			require.Equal(t, json.RawMessage(`1`), tokv.Data) // data was maintained
 			require.False(t, tokv.Idle.Valid)                 // idle expiry was removed
 
+			// rotate it again, this time with new data
+			tok10cRefID := uuid.New()
+			tok10c, err := tt.Rotate(ctx, tok10b, TokenArgs{
+				Type:           "zzzz", // ignored
+				RefID:          tok10cRefID,
+				AbsoluteExpiry: time.Second,
+				Data:           json.RawMessage(`2`),
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, tok10c)
+			require.NotEqual(t, tok10b, tok10c)
+
+			// the old token is not valid anymore
+			_, err = tt.Verify(ctx, tok10b, nil)
+			require.ErrorIs(t, err, ErrInvalid)
+
+			// verify it, the new token is valid
+			tokv, err = tt.Verify(ctx, tok10c, nil)
+			require.NoError(t, err)
+			require.Equal(t, tok10c, tokv.Token)
+			require.Equal(t, tok10cRefID, tokv.RefID)         // ref id was updated
+			require.Equal(t, json.RawMessage(`2`), tokv.Data) // data was updated
+			require.False(t, tokv.Idle.Valid)                 // idle expiry still removed
+
 			// let it expire
 			time.Sleep(time.Second + time.Millisecond)
 
 			// not valid anymore
-			_, err = tt.Verify(ctx, tok10b, nil)
+			_, err = tt.Verify(ctx, tok10c, nil)
 			require.ErrorIs(t, err, ErrInvalid)
 		})
 	}

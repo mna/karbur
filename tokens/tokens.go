@@ -248,10 +248,12 @@ WHERE
 }
 
 // Rotate generates a new token and updates the token entry of oldToken with
-// that new token. The new token inherits the type and data from the old token,
-// only the RefID, absolute expiration and idle expiration are reset using
-// args. It is a no-op if oldToken is a single-use token. It uses the existing
-// DB transaction if there is one.
+// that new token. The new token inherits the type from the old token, only the
+// RefID, absolute expiration and idle expiration are reset using args, and the
+// data is reset only if the provided args.Data field is non-nil. Callers can
+// use json.RawMessage("null") to force data to reset to JSON null. It is a
+// no-op if oldToken is a single-use token. It uses the existing DB transaction
+// if there is one.
 func (t *Tokens) Rotate(ctx context.Context, oldToken string, args TokenArgs) (string, error) {
 	const updateToken = `
 UPDATE
@@ -261,9 +263,10 @@ SET
 	"ref_id" = $2,
   "expiry" = now() + $3 * interval '1 second',
   "idle" = now() + $4 * interval '1 second',
-  "idle_duration" = $4
+  "idle_duration" = $4,
+  "data" = COALESCE($5::json, "data")
 WHERE
-  "token" = $5 AND
+  "token" = $6 AND
   "single_use" IS FALSE
 `
 
@@ -276,8 +279,18 @@ WHERE
 	}
 	absSecs := int64(args.AbsoluteExpiry / time.Second)
 
+	var data sql.Null[json.RawMessage]
+	if args.Data != nil {
+		b, err := json.Marshal(args.Data)
+		if err != nil {
+			return "", err
+		}
+		data.V = json.RawMessage(b)
+		data.Valid = true
+	}
+
 	err := pgdb.EnsureQueryer(ctx, t.Conn, func(ctx context.Context, q pgdb.Queryer) error {
-		_, err := q.Exec(ctx, updateToken, newToken, args.RefID, absSecs, idleSecs, oldToken)
+		_, err := q.Exec(ctx, updateToken, newToken, args.RefID, absSecs, idleSecs, data, oldToken)
 		return err
 	})
 	if err != nil {

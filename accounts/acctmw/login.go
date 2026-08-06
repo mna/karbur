@@ -53,26 +53,16 @@ func (a *Accounts) Login(h http.Handler) http.Handler {
 			return
 		}
 
-		// TODO: extract generateAuthenticatedSession similar to the anonymous version, with a rememberMe arg
-		// that controls the durations, and detect if an anonymous one existed and if so rotate it, otherwise
-		// create brand new (if no anonymous or a previous-different authenticated one).
-
-		// create the session token and the cookie to store it
-		expiry, maxAge := authenticatedSessionDurations(input.RememberMe)
-
-		// the logic regarding the existing session vs the new logged-in one is as follows:
+		// create the session token and the cookie to store it, the logic regarding
+		// the existing session vs the new logged-in one is as follows:
 		//   * if there was already an authenticated session, replace it with a brand
 		//   new one and delete the old authenticated session
 		//   * if there was a saved anonymous session (session id is not empty),
-		//   rotate it to the authenticated one
+		//   rotate it to the authenticated one, keeping its data
 		//   * if there was an unsaved anonymous session (session id is empty),
 		//   create a new one with the existing session data
+		expiry, maxAge := authenticatedSessionDurations(input.RememberMe)
 
-		// TODO: invalidate the anonymous session (ensure it was anonymous and not
-		// a login from an already-logged-in state) and map the session data to the
-		// new session. Probably worth a RegenerateSession helper that does that,
-		// sets the cookie appropriately, and maps the existing session data to the
-		// new ID (or not based on arg).
 		ssnTok, err := a.Tokens.New(r.Context(), tokens.TokenArgs{Type: a.sessionTokenType(), RefID: acct.ID, AbsoluteExpiry: expiry})
 		if err != nil {
 			a.ErrorHandler(w, r, err)
