@@ -27,14 +27,14 @@ type executer interface {
 // "common/layouts/base.tpl" would be compiled to a template named
 // "layouts/base.tpl", while "pages/app/login.tpl" would be named
 // "app/login.tpl".
-func New(tpls fs.FS) (*Renderer, error) {
+func New(tpls fs.FS, funcs template.FuncMap) (*Renderer, error) {
 	readFile := readFileFS(tpls)
 
 	var commonT *template.Template
 	errCommon := walkSubDir(tpls, "common", readFile, func(name, content string) error {
 		var t *template.Template
 		if commonT == nil {
-			commonT = template.New(name)
+			commonT = template.New(name).Funcs(funcs)
 			t = commonT
 		} else {
 			t = commonT.New(name)
@@ -56,7 +56,7 @@ func New(tpls fs.FS) (*Renderer, error) {
 			}
 			t = cloneT.New(name)
 		} else {
-			t = template.New(name)
+			t = template.New(name).Funcs(funcs)
 		}
 
 		pages[name] = t

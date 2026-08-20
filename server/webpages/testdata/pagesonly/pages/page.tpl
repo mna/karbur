@@ -1,1 +1,1 @@
-Page
+Page {{customfn 2}}
