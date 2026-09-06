@@ -19,12 +19,14 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
 
+	"codeberg.org/mna/karbur/ctxvals"
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
 	"github.com/philopon/go-toposort"
@@ -195,6 +197,7 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 		return err
 	}
 
+	logger := ctxvals.LoggerOr(ctx)
 	return pgdb.Tx(ctx, m.beginTxer, nil, func(ctx context.Context, tx pgdb.Txer) error {
 		// acquire the exclusive lock
 		if _, err := tx.Exec(ctx, sqlAcquireLock, m.config.AdvisoryLockID); err != nil {
@@ -202,11 +205,11 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 		}
 
 		// always apply the migrator's own migrations, which are idempotent
-		if err := applyMigrations(ctx, tx, rootStmts, rootNames); err != nil {
+		logger.Info("migrator meta-migrations")
+		if err := applyMigrations(ctx, tx, rootStmts, rootNames, logger); err != nil {
 			return err
 		}
 
-		// TODO: tracing, logging and metrics, via ctx or something with OpenTelemetry
 		for _, group := range order {
 			last, err := groupLastVersion(ctx, tx, group)
 			if err != nil {
@@ -216,9 +219,10 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 			stmts := groupStmts[group]
 			names := groupNames[group]
 			if len(stmts) > last+1 {
+				logger := logger.With("group", group)
 				stmts = stmts[last+1:]
 				names = names[last+1:]
-				if err := applyMigrations(ctx, tx, stmts, names); err != nil {
+				if err := applyMigrations(ctx, tx, stmts, names, logger); err != nil {
 					return err
 				}
 				if err := setGroupLastVersion(ctx, tx, group, len(stmts)-1); err != nil {
@@ -330,8 +334,9 @@ func setGroupLastVersion(ctx context.Context, q pgdb.Queryer, group string, vers
 	return err
 }
 
-func applyMigrations(ctx context.Context, q pgdb.Queryer, migs, names []string) error {
+func applyMigrations(ctx context.Context, q pgdb.Queryer, migs, names []string, logger *slog.Logger) error {
 	for i, mig := range migs {
+		logger.Info("migration", "name", names[i])
 		if _, err := q.Exec(ctx, mig); err != nil {
 			return fmt.Errorf("migrate: %s: %w", names[i], err)
 		}
