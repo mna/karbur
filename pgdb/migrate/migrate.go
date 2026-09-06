@@ -205,9 +205,11 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 		}
 
 		// always apply the migrator's own migrations, which are idempotent
-		logger.Info("migrator meta-migrations")
-		if err := applyMigrations(ctx, tx, rootStmts, rootNames, logger); err != nil {
-			return err
+		{
+			logger := logger.With("group", "(meta migrations)")
+			if err := applyMigrations(ctx, tx, rootStmts, rootNames, logger); err != nil {
+				return err
+			}
 		}
 
 		for _, group := range order {
