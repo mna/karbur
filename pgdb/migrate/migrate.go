@@ -227,7 +227,7 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 				if err := applyMigrations(ctx, tx, stmts, names, logger); err != nil {
 					return err
 				}
-				if err := setGroupLastVersion(ctx, tx, group, len(stmts)-1); err != nil {
+				if err := setGroupLastVersion(ctx, tx, group, len(groupStmts[group])-1); err != nil {
 					return err
 				}
 			}
