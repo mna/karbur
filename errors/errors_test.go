@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"fmt"
 	"io"
 	"testing"
 
@@ -42,6 +43,45 @@ func TestTag(t *testing.T) {
 		err := Tag(constErr, testTag, "x")
 		require.NotNil(t, err)
 		require.ErrorContains(t, err, "[x: ]")
+	})
+}
+
+func TestTagOnce(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		err := TagOnce(nil, testTag)
+		require.Nil(t, err)
+	})
+
+	t.Run("untagged no key value", func(t *testing.T) {
+		err := TagOnce(constErr, testTag)
+		require.NotNil(t, err)
+		require.ErrorContains(t, err, string(testTag))
+		require.ErrorContains(t, err, constErr.Error())
+	})
+
+	t.Run("already tagged same", func(t *testing.T) {
+		err := Tag(constErr, testTag, "x", "1", "y", "2")
+		err = TagOnce(err, testTag, "x", "1", "y", "2")
+		require.ErrorContains(t, err, string(testTag))
+		require.ErrorContains(t, err, "[x: 1, y: 2]")
+	})
+
+	t.Run("already tagged different", func(t *testing.T) {
+		err := Tag(constErr, testTag, "x", "1", "y", "2")
+		err = TagOnce(err, nopeTag, "a", "1", "b", "2")
+		require.ErrorContains(t, err, string(testTag))
+		require.ErrorContains(t, err, "[x: 1, y: 2]")
+		require.NotContains(t, err.Error(), string(nopeTag))
+		require.NotContains(t, err.Error(), "[a: 1, b: 2]")
+	})
+
+	t.Run("already tagged deeper", func(t *testing.T) {
+		err := Tag(constErr, testTag, "x", "1", "y", "2")
+		err = fmt.Errorf("deeper: %w", err)
+		err = TagOnce(err, nopeTag)
+		require.ErrorContains(t, err, string(testTag))
+		require.ErrorContains(t, err, "[x: 1, y: 2]")
+		require.NotContains(t, err.Error(), string(nopeTag))
 	})
 }
 
@@ -159,6 +199,58 @@ func TestWithKeyValue(t *testing.T) {
 			if got != nil {
 				t.Log(got.Error())
 			}
+		})
+	}
+}
+
+func TestUnwrapAll(t *testing.T) {
+	cases := []struct {
+		desc string
+		err  error
+		want error
+	}{
+		{"nil", nil, nil},
+		{"not tagged", constErr, constErr},
+		{"tagged", Tag(constErr, testTag), constErr},
+		{"wrapped", Errorf("wrap: %w", Tag(constErr, testTag, "x", "y")), constErr},
+		{"multi wrap", Errorf("wrap2: %w", Errorf("wrap: %w", Tag(constErr, testTag, "k", "w"))), constErr},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := UnwrapAll(tc.err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestUserMessage(t *testing.T) {
+	cases := []struct {
+		desc   string
+		err    error
+		defMsg string
+		want   string
+	}{
+		{"nil with default", nil, "z", "z"},
+		{"nil with root", nil, RootErrAsUserMsg, ""},
+		{"unwrapped with default", constErr, "z", "z"},
+		{"unwrapped with root", constErr, RootErrAsUserMsg, constErr.Error()},
+		{"wrapped with default", fmt.Errorf("wrapped: %w", constErr), "z", "z"},
+		{"wrapped with root", fmt.Errorf("wrapped: %w", constErr), RootErrAsUserMsg, constErr.Error()},
+		{"tagged with user and default", Tag(constErr, testTag, UserMessageKey, "abc"), "z", "abc"},
+		{"tagged with user and root", Tag(constErr, testTag, UserMessageKey, "abc"), RootErrAsUserMsg, "abc"},
+		{"tagged with default", Tag(constErr, testTag, "x", "abc"), "z", "z"},
+		{"tagged with root", Tag(constErr, testTag, "x", "abc"), RootErrAsUserMsg, constErr.Error()},
+		{"tagged deep with user and default", fmt.Errorf("wrapped: %w", Tag(fmt.Errorf("deep: %w", constErr), testTag, UserMessageKey, "xyz")), "z", "xyz"},
+		{"tagged deep with user and root", fmt.Errorf("wrapped: %w", Tag(fmt.Errorf("deep: %w", constErr), testTag, UserMessageKey, "xyz")), RootErrAsUserMsg, "xyz"},
+		{"tagged deep default", fmt.Errorf("wrapped: %w", Tag(fmt.Errorf("deep: %w", constErr), testTag, "notuser", "xyz")), "z", "z"},
+		{"tagged deep root", fmt.Errorf("wrapped: %w", Tag(fmt.Errorf("deep: %w", constErr), testTag, "notuser", "xyz")), RootErrAsUserMsg, constErr.Error()},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := UserMessage(tc.err, tc.defMsg)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

@@ -62,14 +62,22 @@ func Join(errs ...error) error { return errors.Join(errs...) }
 // See the stdlib's errors.Unwrap documentation for more details.
 func Unwrap(err error) error { return errors.Unwrap(err) }
 
+// UnwrapAll unwraps err until it gets to the root, initial error and it
+// returns that error. If err is nil or is not wrapped, err is returned.
+func UnwrapAll(err error) error {
+	last := err
+	for err = errors.Unwrap(err); err != nil; err = errors.Unwrap(err) {
+		last = err
+	}
+	return last
+}
+
 // ConstError is an error string that can be defined as constant.
 type ConstError string
 
 // Error returns the error message of the ConstError, which is the
 // constant string value itself.
-func (e ConstError) Error() string {
-	return string(e)
-}
+func (e ConstError) Error() string { return string(e) }
 
 // ErrorTag is the type of a tag that can be applied to an error using
 // errors.Tag. It is expected that the main program defines its own predefined
@@ -121,13 +129,12 @@ func TagNew(msg string, tag ErrorTag, kvpairs ...string) error {
 // Errors can be queried for tags with IsTag. An arbitrary set of key-value
 // pairs can also be provided and will be stored in the error and printed in
 // the error message. It is possible to query an error for presence of a key
-// using HasKey and presence of a specific key-value pair with HasKeyValue. If
-// the number of key-value arguments is not even, the final key is associated
-// with an empty string value.
+// using HasKey and to retrieve a specific key-value pair with KeyValue. If the
+// number of key-value arguments is not even, the final key is associated with
+// an empty string value.
 //
 // The special key "code" should be set to an integer value (as a string) when
-// provided, and if so it can be queried with HasCode and extracted as integer
-// with Code.
+// provided, and if so it can be extracted as integer with Code.
 //
 // Example uses of key-value metadata could be to identify the argument that
 // failed validation, or the (stringified) status code of an HTTP request.
@@ -153,10 +160,33 @@ func Tag(e error, tag ErrorTag, kvpairs ...string) error {
 	return &taggedError{tag: tag, err: e, meta: m}
 }
 
-// CodeKey is the key used to store an error code in the error metadata.
-// If the associated value is a valid integer, it can be queried and
-// extracted via HasCode and Code.
-const CodeKey = "code"
+// TagOnce is like Tag except that it returns e unchanged if it has already
+// been tagged. That is, if any error in e's chain is a tagged error, it
+// doesn't tag e again, so its associated ErrorTag and key-value pairs, if any,
+// remain unchanged and possibly different than those provided in this call.
+func TagOnce(e error, tag ErrorTag, kvpairs ...string) error {
+	if e == nil {
+		return e
+	}
+	if _, ok := AsType[*taggedError](e); ok {
+		return e
+	}
+	return Tag(e, tag, kvpairs...)
+}
+
+const (
+	// CodeKey is the key used to store an error code in the error metadata. If
+	// the associated value is a valid integer, it can be extracted via Code.
+	CodeKey = "code"
+
+	// UserMessageKey is the key used to store a user-friendly or user-safe
+	// message with the error. This is usually a less technical version (or a
+	// safer version because it does not leak internal information) of the error
+	// message that makes sense to display to the end-user. It can be extracted
+	// via the standard KeyValue function, but also with UserMessage where a
+	// default message can be used if no such key exists.
+	UserMessageKey = "usermsg"
+)
 
 // IsTag returns true if e or any error in its chain is tagged with the
 // provided tag.
@@ -226,4 +256,26 @@ func Code(e error) int {
 		return n
 	}
 	return 0
+}
+
+// RootErrAsUserMsg is a special value that can be used as default message in
+// the call to UserMessage to retrieve the message of the root error if no
+// specific user message exist.
+const RootErrAsUserMsg = "/"
+
+// UserMessage returns the UserMessageKey value from e or defaultMsg if none is
+// found. If defaultMsg is RootErrAsUserMsg, the error message of the root
+// error (obtained with UnwrapAll) is used, if that error is non-nil.
+func UserMessage(e error, defaultMsg string) string {
+	msg := KeyValue(e, UserMessageKey)
+	if msg == "" {
+		if defaultMsg == RootErrAsUserMsg {
+			if root := UnwrapAll(e); root != nil {
+				return root.Error()
+			}
+			return ""
+		}
+		return defaultMsg
+	}
+	return msg
 }
