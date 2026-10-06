@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"io"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"codeberg.org/mna/karbur/errors"
 	"codeberg.org/mna/karbur/pgdb"
@@ -128,7 +131,7 @@ func TestPool(t *testing.T) {
 			})
 
 			t.Run("Txer", func(t *testing.T) {
-				_, err := pool.Exec(ctx, "CREATE TABLE testint (v integer primary key)")
+				_, err := pool.Exec(ctx, "CREATE TABLE testint (v integer primary key, n integer)")
 				require.NoError(t, err)
 				t.Cleanup(func() {
 					_, _ = pool.Exec(ctx, "DROP TABLE testint")
@@ -420,6 +423,34 @@ func TestPool(t *testing.T) {
 						return err
 					})
 					require.True(t, errors.Is(err, io.EOF))
+				})
+
+				t.Run("Deadlock", func(t *testing.T) {
+					errsTxes := make([]error, 4)
+					var wg sync.WaitGroup
+					wg.Add(len(errsTxes))
+					for i := range errsTxes {
+						go func() {
+							defer wg.Done()
+							errsTxes[i] = pgdb.Tx(ctx, pool, nil, func(ctx context.Context, tx pgdb.Txer) error {
+								_, err := tx.Exec(ctx, "UPDATE testint SET n = 1 WHERE v = $1", (i%2)+1)
+								if err != nil {
+									return err
+								}
+								time.Sleep(10 * time.Millisecond)
+								_, err = tx.Exec(ctx, "UPDATE testint SET n = 2 WHERE v = $1", ((i+1)%2)+1)
+								return err
+							})
+						}()
+					}
+
+					wg.Wait()
+
+					// one should succeed, others should fail
+					require.True(t, slices.Contains(errsTxes, nil))
+					joinedErr := errors.Join(errsTxes...)
+					require.Error(t, joinedErr)
+					require.Equal(t, "40P01", pgdb.SQLState(joinedErr))
 				})
 			})
 
