@@ -13,8 +13,10 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"codeberg.org/mna/karbur/errors"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -73,6 +75,20 @@ type Queryer interface {
 	Cursor(context.Context, string, ...any) Cursor
 }
 
+// TxOptions defines transaction options.
+type TxOptions struct {
+	sql.TxOptions
+	RetryDeadlock bool
+}
+
+// retry configuration
+const (
+	maxAttempts = 4
+	baseBackoff = 50 * time.Millisecond
+	maxBackoff  = 500 * time.Millisecond
+	maxJitter   = 50 * time.Millisecond
+)
+
 type ctxKey int
 
 const (
@@ -92,8 +108,50 @@ func getCtxTx(ctx context.Context) (Txer, bool) {
 // an error, the transaction is rolled back and that error is returned from Tx,
 // otherwise the transaction is committed and nil is returned. The context
 // passed to fn should always be used inside fn.
-func Tx(ctx context.Context, btx BeginTxer, opts *sql.TxOptions, fn func(context.Context, Txer) error) error {
-	tx, err := btx.BeginTx(ctx, opts)
+func Tx(ctx context.Context, btx BeginTxer, opts *TxOptions, fn func(context.Context, Txer) error) error {
+	var sqlOpts *sql.TxOptions
+	if opts != nil && opts.TxOptions != (sql.TxOptions{}) {
+		sqlOpts = &opts.TxOptions
+	}
+
+	var retryDeadlock bool
+	if opts != nil && opts.RetryDeadlock {
+		retryDeadlock = true
+	}
+
+	var attempts int
+	for {
+		attempts++
+		err := doTx(ctx, btx, sqlOpts, fn)
+		if err != nil && retryDeadlock && isDeadlock(err) && attempts < maxAttempts {
+			backoff := calculateBackoff(attempts - 1)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				continue
+			}
+		}
+		return err
+	}
+}
+
+func isDeadlock(err error) bool {
+	code := SQLState(err)
+	return code == "40001" || code == "40P01"
+}
+
+// calculateBackoff implements exponential backoff with full jitter
+func calculateBackoff(attemptMinusOne int) time.Duration {
+	// 2^attempt * baseBackoff
+	backoff := min(baseBackoff*(1<<uint(attemptMinusOne)), maxBackoff)
+
+	// add up to maxJitter
+	return backoff + time.Duration(rand.Int63n(int64(maxJitter)))
+}
+
+func doTx(ctx context.Context, btx BeginTxer, sqlOpts *sql.TxOptions, fn func(context.Context, Txer) error) error {
+	tx, err := btx.BeginTx(ctx, sqlOpts)
 	if err != nil {
 		return err
 	}

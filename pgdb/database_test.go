@@ -452,6 +452,32 @@ func TestPool(t *testing.T) {
 					require.Error(t, joinedErr)
 					require.Equal(t, "40P01", pgdb.SQLState(joinedErr))
 				})
+
+				t.Run("DeadlockRetried", func(t *testing.T) {
+					errsTxes := make([]error, 4)
+					var wg sync.WaitGroup
+					wg.Add(len(errsTxes))
+					for i := range errsTxes {
+						go func() {
+							defer wg.Done()
+							errsTxes[i] = pgdb.Tx(ctx, pool, &pgdb.TxOptions{RetryDeadlock: true}, func(ctx context.Context, tx pgdb.Txer) error {
+								_, err := tx.Exec(ctx, "UPDATE testint SET n = 1 WHERE v = $1", (i%2)+1)
+								if err != nil {
+									return err
+								}
+								time.Sleep(10 * time.Millisecond)
+								_, err = tx.Exec(ctx, "UPDATE testint SET n = 2 WHERE v = $1", ((i+1)%2)+1)
+								return err
+							})
+						}()
+					}
+
+					wg.Wait()
+
+					// all should succeed
+					joinedErr := errors.Join(errsTxes...)
+					require.NoError(t, joinedErr)
+				})
 			})
 
 			t.Run("Conn", func(t *testing.T) {
