@@ -13,11 +13,13 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"strings"
 	"time"
 
+	"codeberg.org/mna/karbur/ctxvals"
 	"codeberg.org/mna/karbur/errors"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
@@ -93,6 +95,7 @@ type ctxKey int
 
 const (
 	ctxTx ctxKey = iota
+	ctxTxOpts
 )
 
 func setCtxTx(ctx context.Context, tx Txer) context.Context {
@@ -104,19 +107,43 @@ func getCtxTx(ctx context.Context) (Txer, bool) {
 	return tx, ok
 }
 
+func getCtxTxOpts(ctx context.Context) (*TxOptions, bool) {
+	opts, ok := ctx.Value(ctxTxOpts).(*TxOptions)
+	return opts, ok
+}
+
+// WithTxOptions stores default TxOptions in the context, to be used when no
+// explicit transaction options are provided to start a transaction. This is
+// especially useful for EnsureTx where it is not possible to provide explicit
+// options, but also to set some app-global options in the root context so that
+// all transactions use those options by default.
+//
+// While those options could be added as an argument to EnsureTx, it would be
+// misleading and confusing since there is no guarantee that the transaction
+// actually uses those options if one already exists.
+func WithTxOptions(ctx context.Context, opts *TxOptions) context.Context {
+	return context.WithValue(ctx, ctxTxOpts, opts)
+}
+
 // Tx begins a transaction with btx and calls fn with the Txer. If fn returns
 // an error, the transaction is rolled back and that error is returned from Tx,
 // otherwise the transaction is committed and nil is returned. The context
 // passed to fn should always be used inside fn.
 func Tx(ctx context.Context, btx BeginTxer, opts *TxOptions, fn func(context.Context, Txer) error) error {
+	if opts == nil {
+		opts, _ = getCtxTxOpts(ctx)
+	}
+
 	var sqlOpts *sql.TxOptions
 	if opts != nil && opts.TxOptions != (sql.TxOptions{}) {
 		sqlOpts = &opts.TxOptions
 	}
 
 	var retryDeadlock bool
+	var logger *slog.Logger
 	if opts != nil && opts.RetryDeadlock {
 		retryDeadlock = true
+		logger = ctxvals.LoggerOr(ctx)
 	}
 
 	var attempts int
@@ -125,6 +152,7 @@ func Tx(ctx context.Context, btx BeginTxer, opts *TxOptions, fn func(context.Con
 		err := doTx(ctx, btx, sqlOpts, fn)
 		if err != nil && retryDeadlock && isDeadlock(err) && attempts < maxAttempts {
 			backoff := calculateBackoff(attempts - 1)
+			logger.Info("deadlock detected, retrying", "attempt", attempts, "backoff", backoff)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
