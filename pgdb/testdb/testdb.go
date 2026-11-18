@@ -7,9 +7,13 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -334,6 +338,36 @@ func connConfig(t testing.TB, original, tempDB string) *pgx.ConnConfig {
 		conf.RuntimeParams = m
 	}
 	m["application_name"] = "testdb"
+
+	// build a connection string and store it in the runtime params, so callers
+	// can extract it as needed
+
+	host := conf.Host
+	if host == "" {
+		host = os.Getenv("PGHOST")
+	}
+	port := conf.Port
+	if port == 0 {
+		i, _ := strconv.Atoi(os.Getenv("PGPORT"))
+		port = uint16(i)
+	}
+	u := &url.URL{
+		Scheme: "postgresql",
+		Host:   fmt.Sprintf("%s:%d", host, port),
+		Path:   tempDB,
+		User:   url.UserPassword(tempDB, tempDB),
+	}
+	cto := conf.ConnectTimeout
+	if cto <= 0 {
+		i, _ := strconv.Atoi(os.Getenv("PGCONNECT_TIMEOUT"))
+		cto = time.Duration(i) * time.Second
+	}
+	if cto > time.Second {
+		q := u.Query()
+		q.Add("connect_timeout", fmt.Sprint(cto/time.Second))
+		u.RawQuery = q.Encode()
+	}
+	m["connection_string"] = u.String()
 
 	return conf
 }
