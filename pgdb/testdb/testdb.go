@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,10 +22,11 @@ import (
 
 var ctx = context.Background()
 
-// NewSQL creates a temporary test database and returns a *sql.DB
-// that connects to it. The database is automatically dropped in the test
-// cleanup phase, unless the PGDB_KEEP_TESTDB environment variable is set.
-// If prefix is the empty string, "test" is used by default.
+// NewSQL creates a temporary test database and returns a *sql.DB that connects
+// to it and a connection string that may be used to connect to that test
+// database. The database is automatically dropped in the test cleanup phase,
+// unless the PGDB_KEEP_TESTDB environment variable is set. If prefix is the
+// empty string, "test" is used by default.
 //
 // If any fns are provided, they are called in order with a connection to
 // the newly created test database to execute any setup required before the
@@ -34,14 +34,15 @@ var ctx = context.Background()
 // can be used in this context.
 //
 // It uses the pgx SQL driver from github.com/jackc/pgx/v5/stdlib.
-func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
+func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) (*sql.DB, string) {
 	return newSQL(t, "pgx", connStr, prefix, fns...)
 }
 
-// NewPqSQL creates a temporary test database and returns a *sql.DB
-// that connects to it. The database is automatically dropped in the test
-// cleanup phase, unless the PGDB_KEEP_TESTDB environment variable is set.
-// If prefix is the empty string, "test" is used by default.
+// NewPqSQL creates a temporary test database and returns a *sql.DB that
+// connects to it and a connection string that may be used to connect to that
+// test database. The database is automatically dropped in the test cleanup
+// phase, unless the PGDB_KEEP_TESTDB environment variable is set. If prefix is
+// the empty string, "test" is used by default.
 //
 // If any fns are provided, they are called in order with a connection to
 // the newly created test database to execute any setup required before the
@@ -49,11 +50,11 @@ func NewSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) 
 // can be used in this context.
 //
 // It uses the postgres SQL driver from github.com/lib/pq.
-func NewPqSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
+func NewPqSQL(t testing.TB, connStr, prefix string, fns ...func(*sql.Conn) error) (*sql.DB, string) {
 	return newSQL(t, "postgres", connStr, prefix, fns...)
 }
 
-func newSQL(t testing.TB, driver, connStr, prefix string, fns ...func(*sql.Conn) error) *sql.DB {
+func newSQL(t testing.TB, driver, connStr, prefix string, fns ...func(*sql.Conn) error) (*sql.DB, string) {
 	if prefix == "" {
 		prefix = "test"
 	}
@@ -73,6 +74,7 @@ func newSQL(t testing.TB, driver, connStr, prefix string, fns ...func(*sql.Conn)
 	})
 
 	conf := connConfig(t, connStr, tempDB)
+	dbConnStr := buildConnString(tempDB, conf)
 	connStrTemp := stdlib.RegisterConnConfig(conf)
 	tdb, err := sql.Open("pgx", connStrTemp)
 	if err != nil {
@@ -95,19 +97,20 @@ func newSQL(t testing.TB, driver, connStr, prefix string, fns ...func(*sql.Conn)
 			}
 		}
 	}
-	return tdb
+	return tdb, dbConnStr
 }
 
-// NewPgx creates a temporary test database and returns a *pgxpool.Pool
-// that connects to it. The database is automatically dropped in the test
-// cleanup phase, unless the PGDB_KEEP_TESTDB environment variable is set.
-// If prefix is the empty string, "test" is used by default.
+// NewPgx creates a temporary test database and returns a *pgxpool.Pool that
+// connects to it and a connection string that may be used to connect to that
+// test database. The database is automatically dropped in the test cleanup
+// phase, unless the PGDB_KEEP_TESTDB environment variable is set. If prefix is
+// the empty string, "test" is used by default.
 //
 // If any fns are provided, they are called in order with a connection to
 // the newly created test database to execute any setup required before the
 // test. The MockPgcronPgx function from this package is one such function that
 // can be used in this context.
-func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) *pgxpool.Pool {
+func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) (*pgxpool.Pool, string) {
 	if prefix == "" {
 		prefix = "test"
 	}
@@ -127,6 +130,7 @@ func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) 
 	})
 
 	conf := poolConnConfig(t, connStr, tempDB)
+	dbConnStr := buildConnString(tempDB, conf.ConnConfig)
 	db, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +150,7 @@ func NewPgx(t testing.TB, connStr, prefix string, fns ...func(*pgx.Conn) error) 
 			t.Fatal(err)
 		}
 	}
-	return db
+	return db, dbConnStr
 }
 
 // MockPgcronPgx creates the database objects required to mock the pg_cron
@@ -339,37 +343,26 @@ func connConfig(t testing.TB, original, tempDB string) *pgx.ConnConfig {
 	}
 	m["application_name"] = "testdb"
 
+	return conf
+}
+
+func buildConnString(tempDB string, conf *pgx.ConnConfig) string {
 	// build a connection string and store it in the runtime params, so callers
 	// can extract it as needed
-
 	host := conf.Host
-	if host == "" {
-		host = os.Getenv("PGHOST")
-	}
 	port := conf.Port
-	if port == 0 {
-		i, _ := strconv.Atoi(os.Getenv("PGPORT"))
-		port = uint16(i)
-	}
 	u := &url.URL{
 		Scheme: "postgresql",
 		Host:   fmt.Sprintf("%s:%d", host, port),
 		Path:   tempDB,
 		User:   url.UserPassword(tempDB, tempDB),
 	}
-	cto := conf.ConnectTimeout
-	if cto <= 0 {
-		i, _ := strconv.Atoi(os.Getenv("PGCONNECT_TIMEOUT"))
-		cto = time.Duration(i) * time.Second
-	}
-	if cto > time.Second {
+	if cto := conf.ConnectTimeout; cto > time.Second {
 		q := u.Query()
-		q.Add("connect_timeout", fmt.Sprint(cto/time.Second))
+		q.Add("connect_timeout", fmt.Sprint(int(cto/time.Second)))
 		u.RawQuery = q.Encode()
 	}
-	m["connection_string"] = u.String()
-
-	return conf
+	return u.String()
 }
 
 type execer interface {

@@ -26,9 +26,9 @@ func TestPool(t *testing.T) {
 		name  string
 		setup func() pgdb.Pool
 	}{
-		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
-		{"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
-		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pgx", func() pgdb.Pool { db, _ := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
+		{"sql", func() pgdb.Pool { db, _ := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db, _ := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

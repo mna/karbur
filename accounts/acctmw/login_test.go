@@ -21,9 +21,9 @@ func TestLogin(t *testing.T) {
 		name  string
 		setup func() pgdb.Pool
 	}{
-		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
-		// {"sql", func() pgdb.Pool { db := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
-		// {"pq", func() pgdb.Pool { db := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		{"pgx", func() pgdb.Pool { db, _ := testdb.NewPgx(t, "", ""); return pgxadapt.ToPool(db) }},
+		// {"sql", func() pgdb.Pool { db, _ := testdb.NewSQL(t, "", ""); return sqladapt.ToPool(db) }},
+		// {"pq", func() pgdb.Pool { db, _ := testdb.NewPqSQL(t, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,9 +174,9 @@ func BenchmarkFailedLogin(b *testing.B) {
 		name  string
 		setup func() pgdb.Pool
 	}{
-		{"pgx", func() pgdb.Pool { db := testdb.NewPgx(b, "", ""); return pgxadapt.ToPool(db) }},
-		{"sql", func() pgdb.Pool { db := testdb.NewSQL(b, "", ""); return sqladapt.ToPool(db) }},
-		{"pq", func() pgdb.Pool { db := testdb.NewPqSQL(b, "", ""); return sqladapt.ToPool(db) }},
+		{"pgx", func() pgdb.Pool { db, _ := testdb.NewPgx(b, "", ""); return pgxadapt.ToPool(db) }},
+		{"sql", func() pgdb.Pool { db, _ := testdb.NewSQL(b, "", ""); return sqladapt.ToPool(db) }},
+		{"pq", func() pgdb.Pool { db, _ := testdb.NewPqSQL(b, "", ""); return sqladapt.ToPool(db) }},
 	}
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {

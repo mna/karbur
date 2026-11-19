@@ -70,8 +70,13 @@ func TestNewPgx(t *testing.T) {
 			}
 		})
 
-		db := NewPgx(t, "", "testdb", MockPgcronPgx)
+		db, connStr := NewPgx(t, "", "testdb", MockPgcronPgx)
 		require.NotNil(t, db)
+		withConnStrDB, err := sql.Open("pgx", connStr)
+		require.NoError(t, err)
+		err = withConnStrDB.Ping()
+		require.NoError(t, err)
+		_ = withConnStrDB.Close()
 
 		t.Run("creates database with prefix", func(t *testing.T) {
 			err := pgxscan.Get(ctx, db, &testDBName, "SELECT current_database()")
@@ -133,8 +138,13 @@ func TestNewSQL(t *testing.T) {
 			}
 		})
 
-		db := NewSQL(t, "", "testdb", MockPgcronSQL)
+		db, connStr := NewSQL(t, "", "testdb", MockPgcronSQL)
 		require.NotNil(t, db)
+		withConnStrDB, err := sql.Open("pgx", connStr)
+		require.NoError(t, err)
+		err = withConnStrDB.Ping()
+		require.NoError(t, err)
+		_ = withConnStrDB.Close()
 
 		t.Run("creates database with prefix", func(t *testing.T) {
 			err := sqlscan.Get(ctx, db, &testDBName, "SELECT current_database()")
@@ -196,8 +206,13 @@ func TestNewPqSQL(t *testing.T) {
 			}
 		})
 
-		db := NewPqSQL(t, "", "testdb", MockPgcronSQL)
+		db, connStr := NewPqSQL(t, "", "testdb", MockPgcronSQL)
 		require.NotNil(t, db)
+		withConnStrDB, err := sql.Open("pgx", connStr)
+		require.NoError(t, err)
+		err = withConnStrDB.Ping()
+		require.NoError(t, err)
+		_ = withConnStrDB.Close()
 
 		t.Run("creates database with prefix", func(t *testing.T) {
 			err := sqlscan.Get(ctx, db, &testDBName, "SELECT current_database()")
